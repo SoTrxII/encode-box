@@ -14,7 +14,6 @@ jobs:
         with:
           go-version: 1.18
       - run: go mod tidy
-      - run: npm run build
       - name: Execute tests
         run: go test ./...  -covermode=atomic -coverprofile=coverage.out
       - name: Upload results to Codecov
