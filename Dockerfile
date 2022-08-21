@@ -23,4 +23,4 @@ WORKDIR /app
 COPY --from=builder --chmod=0500 --chown=appuser:appuser  /app/build/server ./
 
 EXPOSE 8080
-ENTRYPOINT [ "/server" ]
+ENTRYPOINT [ "/app/server" ]

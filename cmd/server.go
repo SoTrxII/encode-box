@@ -165,16 +165,16 @@ func encode[T object_storage.BindingProxy](eBox *encode_box.EncodeBox[T], req *e
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
-		return
+		log.Warn("No .env file detected ! ")
 	}
 	// If pubsub component is defined in env, enable the progress broker
 	pubSubComponent := os.Getenv("PUBSUB_COMPONENT")
 	if pubSubComponent != "" {
+		log.Warn("Loading pubsub component ! ")
 		ctx := context.Background()
 		daprClient, err := client.NewClient()
 		if err != nil {
-			log.Fatal("Error loading .env file")
+			log.Fatalf("Could not create dapr client : %s. Aborting", err.Error())
 			return
 		}
 		broker, err = progress_broker.NewProgressBroker[client.Client](&ctx, &daprClient, progress_broker.NewBrokerOptions{
@@ -182,7 +182,7 @@ func main() {
 			Topic:     "",
 		})
 		if err != nil {
-			log.Fatal("Error loading .env file")
+			log.Fatalf("Could not create progress broker : %s. Aborting", err.Error())
 			return
 		}
 	}
