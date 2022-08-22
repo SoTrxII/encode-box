@@ -196,7 +196,9 @@ func TestMain_NewEncodeRequest_Options(t *testing.T) {
 }
 
 func TestMain_NewEncodeRequest_WrongRequest(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	body := bytes.Buffer{}
+	_, _ = body.Write([]byte("eReqContent"))
+	req := httptest.NewRequest(http.MethodPost, "/", &body)
 	w := httptest.NewRecorder()
 	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{})
 	assert.Equal(t, http.StatusBadRequest, w.Code)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	encode_box "encode-box/pkg/encode-box"
 	"encode-box/pkg/logger"
@@ -60,11 +61,15 @@ func encodeSync[T object_storage.BindingProxy](w http.ResponseWriter, req *http.
 		return
 	}
 	defer req.Body.Close()
+
 	// Check the format of the encode request...
-	encodeRequest, err := makeEncodingRequest(req.Body)
+
+	// Do not consume the body, instead make a copy of it
+	contents, _ := ioutil.ReadAll(req.Body)
+	bodyCopy := ioutil.NopCloser(bytes.NewReader(contents))
+	encodeRequest, err := makeEncodingRequest(bodyCopy)
 	if err != nil {
-		bodyContent, _ := ioutil.ReadAll(req.Body)
-		log.Warnf(`Wrong encode request received "%s" : %s `, string(bodyContent), err.Error())
+		log.Warnf(`Wrong encode request received "%s" : %s `, contents, err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
