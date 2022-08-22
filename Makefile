@@ -8,3 +8,4 @@ dapr:
 # https://github.com/golang/mock
 mockgen:
 	mockgen -source .\pkg\object-storage\object-storage.go -destination .\internal\mock\object-storage.go
+	mockgen -source .\pkg\encode-box\encode-box.go -destination .\internal\mock\encode-box.go
