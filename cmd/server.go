@@ -17,26 +17,49 @@ import (
 )
 
 var (
-	log    = logger.Build()
+	// Global logger instance
+	log = logger.Build()
+	// Master context
+	ctx = context.Background()
+	// Event broker, can be nil
 	broker *progress_broker.ProgressBroker[client.Client]
+	// Object store instance, use to retrieve/upload assets
+	objStore *object_storage.ObjectStorage[client.Client]
 )
 
 const (
 	// HTTP port for the server
 	PORT = 8080
-	// Dapr component name for the target object storage solution
-	ObjStoreComponent = "object-store"
-	PubSubComponent   = "object-store"
-	PubSubTopic       = "encoding-state"
+	// Env variables
+	OBJECT_STORE_NAME     = "OBJECT_STORE_NAME"
+	PUBSUB_NAME           = "PUBSUB_NAME"
+	PUBSUB_TOPIC_PROGRESS = "PUBSUB_TOPIC_PROGRESS"
+	// Topic to send progress event into
+	DefaultPubSubTopic = "encoding-state"
 )
 
-func newEncodeRequest(w http.ResponseWriter, req *http.Request) {
+// Some kind of a root DI container
+type components[T object_storage.BindingProxy] struct {
+	// Encode box
+	eBox *encode_box.EncodeBox[T]
+	// Object backend storage
+	objStore *object_storage.ObjectStorage[T]
+}
+
+// Fire a new encoding
+// /!\ An HTTP return code 200 will only be returned **after** the encoding is done /!\
+// This function is intended to be used with a messaging service. This way, the message will
+// only be deleted from the messaging service after we made sure the processing is complete
+// Although it's still possible to use it in plain HTTP, you'd have to set the HTTP_SESSION
+// max time to 0
+func encodeSync[T object_storage.BindingProxy](w http.ResponseWriter, req *http.Request, comp components[T]) {
 	// Confirm Dapr subscription
 	if req.Method == http.MethodOptions {
 		_, _ = w.Write([]byte("OK"))
 		return
 	}
 	defer req.Body.Close()
+	// Check the format of the encode request...
 	encodeRequest, err := makeEncodingRequest(req.Body)
 	if err != nil {
 		log.Warnf(`Wrong encode request received "%+v" : %s `, req.Body, err.Error())
@@ -44,39 +67,43 @@ func newEncodeRequest(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	ctx := context.Background()
-	eBox, err := makeEncodeBox(&ctx)
+	// And launch the encoding process...
+	log.Infof(`New encoding request with id "%s" received !`, encodeRequest.RecordId)
+	workDir, err := os.MkdirTemp("", "encode-instance")
 	if err != nil {
-		log.Errorf(`error while processing encode request "%+v" : %s`, *encodeRequest, err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		http.Error(w, fmt.Sprintf("can't create temp workDir : %s", err.Error()), http.StatusInternalServerError)
 	}
-	dir, err := os.MkdirTemp("", "encode-instance")
-	if err != nil {
-		http.Error(w, fmt.Sprintf("can't create temp dir : %s", err.Error()), http.StatusInternalServerError)
-	}
-	output := filepath.Join(dir, "out.mp4")
-	err, code := encode(eBox, encodeRequest, output)
+	outputName := fmt.Sprintf("%s.mp4", encodeRequest.RecordId)
+	outputPath := filepath.Join(workDir, outputName)
+	err, code := encode(comp.eBox, encodeRequest, outputPath)
 	if err != nil {
 		log.Errorf(`error while processing encode request "%+v" : %s`, *encodeRequest, err.Error())
 		http.Error(w, err.Error(), code)
 		return
 	}
-	objStore, err := makeObjStorage(&ctx)
-	if err != nil {
-		log.Errorf(`error while creating an object storage client: %s`, err.Error())
-		http.Error(w, "Unexpected error", http.StatusInternalServerError)
-		return
-	}
-	err = objStore.Upload(output, fmt.Sprintf("%s.mp4", encodeRequest.RecordId))
+
+	// Once the encoding is complete, upload the resulting video on the backend object storage...
+	log.Infof(`Uploading "%s" on the backend object storage`, outputPath)
+	err = comp.objStore.Upload(outputPath, outputName)
 	if err != nil {
 		log.Errorf(`error while upload the record in the backend object storage : %s`, err.Error())
 		http.Error(w, "Unexpected error", http.StatusInternalServerError)
 		return
 	}
+
+	// And clean up temp files. Downloaded assets are already cleaned up by the encode-box itself
+	log.Infof(`Removing working directory "%s" from the local filesystem`, workDir)
+	err = os.RemoveAll(workDir)
+	if err != nil {
+		log.Warnf(`Could not remove directiory "%s" : %s`, workDir, err.Error())
+	}
+	log.Infof(`Processing of request with id "%s" complete !`, encodeRequest.RecordId)
+
+	// Finally, ACK the message
 	_, _ = w.Write([]byte("OK"))
 }
 
+// Health endpoint
 func healthz(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("OK"))
@@ -103,24 +130,6 @@ func makeEncodingRequest(from io.ReadCloser) (*encode_box.EncodingRequest, error
 		return nil, fmt.Errorf("no audio track provided")
 	}
 	return &eReq, nil
-}
-
-// Make a new object storage instance
-func makeObjStorage(ctx *context.Context) (*object_storage.ObjectStorage[client.Client], error) {
-	objStore, err := object_storage.NewDaprObjectStorage(ctx, ObjStoreComponent)
-	if err != nil {
-		return nil, err
-	}
-	return objStore, nil
-}
-
-// Make a new encode box instance
-func makeEncodeBox(ctx *context.Context) (*encode_box.EncodeBox[client.Client], error) {
-	objStore, err := object_storage.NewDaprObjectStorage(ctx, ObjStoreComponent)
-	if err != nil {
-		return nil, err
-	}
-	return encode_box.NewEncodeBox[client.Client](ctx, objStore), nil
 }
 
 // Fire a new encoding
@@ -162,32 +171,58 @@ func encode[T object_storage.BindingProxy](eBox *encode_box.EncodeBox[T], req *e
 	}
 }
 
-func main() {
+// Fetch all env variables, and initializes corresponding components
+func loadComponents() error {
 	err := godotenv.Load()
 	if err != nil {
 		log.Warn("No .env file detected ! ")
 	}
-	// If pubsub component is defined in env, enable the progress broker
-	pubSubComponent := os.Getenv("PUBSUB_COMPONENT")
-	if pubSubComponent != "" {
-		log.Warn("Loading pubsub component ! ")
-		ctx := context.Background()
-		daprClient, err := client.NewClient()
-		if err != nil {
-			log.Fatalf("Could not create dapr client : %s. Aborting", err.Error())
-			return
-		}
-		broker, err = progress_broker.NewProgressBroker[client.Client](&ctx, &daprClient, progress_broker.NewBrokerOptions{
-			Component: "",
-			Topic:     "",
-		})
-		if err != nil {
-			log.Fatalf("Could not create progress broker : %s. Aborting", err.Error())
-			return
-		}
+	// First, load the object store. This is mandatory, if it's not defined, abort
+	objStoreComponent := os.Getenv(OBJECT_STORE_NAME)
+	if objStoreComponent == "" {
+		return fmt.Errorf(`Object store component is not defined ! Aborting !`)
+	}
+	objStore, err = object_storage.NewDaprObjectStorage(&ctx, objStoreComponent)
+	if err != nil {
+		return fmt.Errorf("cannot init object store : %w", err)
 	}
 
-	http.HandleFunc("/encode", newEncodeRequest)
+	// Next, load the event broker. This is optional, the server can function without it defined
+	pubSubComponent := os.Getenv(PUBSUB_NAME)
+	pubSubTopic := os.Getenv(PUBSUB_TOPIC_PROGRESS)
+	if pubSubComponent != "" {
+		log.Info("The pubsub component is defined ! ")
+		daprClient, err := client.NewClient()
+		if err != nil {
+			return fmt.Errorf("could not create dapr client : %w. Aborting", err)
+		}
+		if pubSubTopic == "" {
+			pubSubTopic = DefaultPubSubTopic
+		}
+		broker, err = progress_broker.NewProgressBroker[client.Client](&ctx, &daprClient, progress_broker.NewBrokerOptions{
+			Component: pubSubComponent,
+			Topic:     pubSubTopic,
+		})
+		if err != nil {
+			return fmt.Errorf("Could not create progress broker : %w. Aborting", err)
+		}
+	}
+	return nil
+}
+
+func main() {
+
+	err := loadComponents()
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(-1)
+	}
+	http.HandleFunc("/encode", func(w http.ResponseWriter, req *http.Request) {
+		encodeSync(w, req, components[client.Client]{
+			eBox:     encode_box.NewEncodeBox(&ctx, objStore),
+			objStore: objStore,
+		})
+	})
 	http.HandleFunc("/healthz", healthz)
 	log.Infof("Started server on PORT %d", PORT)
 	err = http.ListenAndServe(fmt.Sprintf(":%d", PORT), nil)

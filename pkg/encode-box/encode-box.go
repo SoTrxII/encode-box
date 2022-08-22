@@ -120,6 +120,7 @@ Loop:
 func (eb *EncodeBox[T]) cleanUpAssets(assets *AssetCollection) {
 	// Fire all downloads concurrently
 	for i, asset := range *assets {
+		log.Infof("[Encode box] :: Trying to delete asset %s", asset.path)
 		err := os.Remove(asset.path)
 		if err != nil {
 			log.Warnf("[Encode box] :: Could not delete asset %s", asset.path)

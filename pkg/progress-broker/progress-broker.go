@@ -27,9 +27,9 @@ const (
 )
 
 type EncodeInfos struct {
-	RecordId    string
-	EncodeState EncodeState
-	Data        interface{}
+	RecordId    string      `json:"recordId"`
+	EncodeState EncodeState `json:"encodeState"`
+	Data        interface{} `json:"data"`
 }
 
 type PubSubProxy interface {
