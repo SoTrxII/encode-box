@@ -25,19 +25,15 @@ type ObjectStorage[T BindingProxy] struct {
 }
 
 // NewDaprObjectStorage Prod ready constructor for an object-storage using Dapr
-func NewDaprObjectStorage(ctx *context.Context, component string) (*ObjectStorage[client.Client], error) {
+func NewDaprObjectStorage(ctx *context.Context, daprClient *client.Client, component string) (*ObjectStorage[client.Client], error) {
 	dir, err := os.MkdirTemp("", "downloader-")
-	if err != nil {
-		return nil, err
-	}
-	daprClient, err := client.NewClient()
 	if err != nil {
 		return nil, err
 	}
 	return &ObjectStorage[client.Client]{
 		assetsPath:    dir,
 		componentName: component,
-		client:        &daprClient,
+		client:        daprClient,
 		ctx:           ctx,
 	}, nil
 }

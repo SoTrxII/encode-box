@@ -11,11 +11,15 @@ import (
 	"fmt"
 	"github.com/dapr/go-sdk/client"
 	"github.com/joho/godotenv"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 var (
@@ -32,12 +36,19 @@ var (
 const (
 	// HTTP port for the server
 	PORT = 8080
+	// GRPC port to use to communicate with DAPR
+	DAPR_GRPC_PORT = 50001
 	// Env variables
-	OBJECT_STORE_NAME     = "OBJECT_STORE_NAME"
-	PUBSUB_NAME           = "PUBSUB_NAME"
-	PUBSUB_TOPIC_PROGRESS = "PUBSUB_TOPIC_PROGRESS"
+	OBJECT_STORE_NAME        = "OBJECT_STORE_NAME"
+	PUBSUB_NAME              = "PUBSUB_NAME"
+	PUBSUB_TOPIC_PROGRESS    = "PUBSUB_TOPIC_PROGRESS"
+	DAPR_MAX_REQUEST_SIZE_MB = "DAPR_MAX_REQUEST_SIZE_MB"
+
+	// Default values
 	// Topic to send progress event into
 	DefaultPubSubTopic = "encoding-state"
+	// Override default max grpc request size (4MB) for dapr client
+	DefaultDaprMaxRequestSize = 2500
 )
 
 // Some kind of a root DI container
@@ -210,6 +221,18 @@ func encode[T object_storage.BindingProxy](eBox *encode_box.EncodeBox[T], req *e
 	}
 }
 
+func makeDaprClient(maxRequestSizeMB int) (*client.Client, error) {
+	var opts []grpc.CallOption
+	opts = append(opts, grpc.MaxCallRecvMsgSize(maxRequestSizeMB*1024*1024))
+	conn, err := grpc.Dial(net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", DAPR_GRPC_PORT)),
+		grpc.WithDefaultCallOptions(opts...), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, err
+	}
+	daprClient := client.NewClientWithConnection(conn)
+	return &daprClient, nil
+}
+
 // Fetch all env variables, and initializes corresponding components
 func loadComponents() error {
 	err := godotenv.Load()
@@ -221,7 +244,16 @@ func loadComponents() error {
 	if objStoreComponent == "" {
 		return fmt.Errorf(`Object store component is not defined ! Aborting !`)
 	}
-	objStore, err = object_storage.NewDaprObjectStorage(&ctx, objStoreComponent)
+	maxReqSizeEnv := os.Getenv(DAPR_MAX_REQUEST_SIZE_MB)
+	maxRequestSize := DefaultDaprMaxRequestSize
+	if i, err := strconv.ParseInt(maxReqSizeEnv, 10, 32); err != nil {
+		maxRequestSize = int(i)
+	}
+	daprClient, err := makeDaprClient(maxRequestSize)
+	if err != nil {
+		return fmt.Errorf("cannot init dapr client : %w", err)
+	}
+	objStore, err = object_storage.NewDaprObjectStorage(&ctx, daprClient, objStoreComponent)
 	if err != nil {
 		return fmt.Errorf("cannot init object store : %w", err)
 	}
@@ -231,14 +263,10 @@ func loadComponents() error {
 	pubSubTopic := os.Getenv(PUBSUB_TOPIC_PROGRESS)
 	if pubSubComponent != "" {
 		log.Info("The pubsub component is defined ! ")
-		daprClient, err := client.NewClient()
-		if err != nil {
-			return fmt.Errorf("could not create dapr client : %w. Aborting", err)
-		}
 		if pubSubTopic == "" {
 			pubSubTopic = DefaultPubSubTopic
 		}
-		broker, err = progress_broker.NewProgressBroker[client.Client](&ctx, &daprClient, progress_broker.NewBrokerOptions{
+		broker, err = progress_broker.NewProgressBroker[client.Client](&ctx, daprClient, progress_broker.NewBrokerOptions{
 			Component: pubSubComponent,
 			Topic:     pubSubTopic,
 		})
