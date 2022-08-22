@@ -11,6 +11,7 @@ import (
 	"github.com/dapr/go-sdk/client"
 	"github.com/joho/godotenv"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -62,7 +63,8 @@ func encodeSync[T object_storage.BindingProxy](w http.ResponseWriter, req *http.
 	// Check the format of the encode request...
 	encodeRequest, err := makeEncodingRequest(req.Body)
 	if err != nil {
-		log.Warnf(`Wrong encode request received "%+v" : %s `, req.Body, err.Error())
+		bodyContent, _ := ioutil.ReadAll(req.Body)
+		log.Warnf(`Wrong encode request received "%s" : %s `, string(bodyContent), err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

@@ -131,7 +131,7 @@ spec:
   version: v1
   metadata:
   - name: host
-    value: "amqp://message-queue-rabbitmq.tabletop-records.svc.cluster.local:5672"
+    value: "amqp://<USER>:<PASS>@rabbit:5672"
     # Set this queue to persists when a node is down
   - name: durable
     value: true
