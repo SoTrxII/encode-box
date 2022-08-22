@@ -204,6 +204,42 @@ func TestMain_NewEncodeRequest_WrongRequest(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestMain_NewEncodeRequest_DaprEvent(t *testing.T) {
+	body := bytes.Buffer{}
+	daprEvent := DaprEvent{
+		Type:  "dapr",
+		Topic: "encode",
+		Data: encode_box.EncodingRequest{
+			RecordId:   "1",
+			VideoKey:   "d",
+			AudiosKeys: []string{"a", "b"},
+			ImageKey:   "",
+			Options:    encode_box.EncodingOptions{},
+		},
+	}
+	eReqContent, _ := json.Marshal(daprEvent)
+	_, _ = body.Write(eReqContent)
+	req := httptest.NewRequest(http.MethodPost, "/", &body)
+	_, err := parseBody(req.Body)
+	assert.Nil(t, err)
+}
+
+func TestMain_NewEncodeRequest_RawRequest(t *testing.T) {
+	body := bytes.Buffer{}
+	rawReq := encode_box.EncodingRequest{
+		RecordId:   "1",
+		VideoKey:   "d",
+		AudiosKeys: []string{"a", "b"},
+		ImageKey:   "",
+		Options:    encode_box.EncodingOptions{},
+	}
+	eReqContent, _ := json.Marshal(rawReq)
+	_, _ = body.Write(eReqContent)
+	req := httptest.NewRequest(http.MethodPost, "/", &body)
+	_, err := parseBody(req.Body)
+	assert.Nil(t, err)
+}
+
 /*
 *********************************************
 *			Whole request testing			*

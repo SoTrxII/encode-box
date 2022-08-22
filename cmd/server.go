@@ -67,6 +67,7 @@ func encodeSync[T object_storage.BindingProxy](w http.ResponseWriter, req *http.
 	// Do not consume the body, instead make a copy of it
 	contents, _ := ioutil.ReadAll(req.Body)
 	bodyCopy := ioutil.NopCloser(bytes.NewReader(contents))
+	defer bodyCopy.Close()
 	encodeRequest, err := makeEncodingRequest(bodyCopy)
 	if err != nil {
 		log.Warnf(`Wrong encode request received "%s" : %s `, contents, err.Error())
@@ -116,13 +117,44 @@ func healthz(w http.ResponseWriter, req *http.Request) {
 	_, _ = w.Write([]byte("OK"))
 }
 
+// Attempt to parse a body into an encoding request
+func parseBody(from io.ReadCloser) (*encode_box.EncodingRequest, error) {
+	// Two types of body have to be supported : a dapr event or a raw body
+
+	// Duplicate the body to be able to read from it twice
+	contents, _ := ioutil.ReadAll(from)
+	fromCopy := ioutil.NopCloser(bytes.NewReader(contents))
+	fromCopy2 := ioutil.NopCloser(bytes.NewReader(contents))
+	defer fromCopy.Close()
+	defer fromCopy2.Close()
+
+	// First, try to parse the body as a dapr event
+	var dEvt DaprEvent
+	err := json.NewDecoder(fromCopy).Decode(&dEvt)
+	if err != nil {
+		return nil, err
+	}
+	// If "Type" and "Topic" are in the struct, this should be a dapr event,
+	// in which case the payload is in "Data"
+	if dEvt.Type != "" && dEvt.Topic != "" {
+		return &dEvt.Data, nil
+	}
+
+	// Else, try to parse the request as a raw encoding request
+	var eReq encode_box.EncodingRequest
+	err = json.NewDecoder(fromCopy2).Decode(&eReq)
+	if err != nil {
+		return nil, err
+	}
+	return &eReq, nil
+}
+
 // Format a proper encoding request from a stream
 func makeEncodingRequest(from io.ReadCloser) (*encode_box.EncodingRequest, error) {
 	if from == nil {
 		return nil, fmt.Errorf("no body provided")
 	}
-	var eReq encode_box.EncodingRequest
-	err := json.NewDecoder(from).Decode(&eReq)
+	eReq, err := parseBody(from)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +168,7 @@ func makeEncodingRequest(from io.ReadCloser) (*encode_box.EncodingRequest, error
 	if len(eReq.AudiosKeys) == 0 {
 		return nil, fmt.Errorf("no audio track provided")
 	}
-	return &eReq, nil
+	return eReq, nil
 }
 
 // Fire a new encoding
@@ -236,4 +268,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// An event as forwarded by dapr
+type DaprEvent struct {
+	Type  string                     `json:"type"`
+	Topic string                     `json:"topic"`
+	Data  encode_box.EncodingRequest `json:"data"`
 }
