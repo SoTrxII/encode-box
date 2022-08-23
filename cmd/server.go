@@ -36,19 +36,21 @@ var (
 const (
 	// HTTP port for the server
 	PORT = 8080
-	// GRPC port to use to communicate with DAPR
-	DAPR_GRPC_PORT = 50001
 	// Env variables
 	OBJECT_STORE_NAME        = "OBJECT_STORE_NAME"
 	PUBSUB_NAME              = "PUBSUB_NAME"
 	PUBSUB_TOPIC_PROGRESS    = "PUBSUB_TOPIC_PROGRESS"
 	DAPR_MAX_REQUEST_SIZE_MB = "DAPR_MAX_REQUEST_SIZE_MB"
+	// GRPC port to use to communicate with DAPR
+	DAPR_GRPC_PORT = "DAPR_GRPC_PORT"
 
 	// Default values
 	// Topic to send progress event into
 	DefaultPubSubTopic = "encoding-state"
 	// Override default max grpc request size (4MB) for dapr client
 	DefaultDaprMaxRequestSize = 2500
+	// Default grpc api port for dapr
+	DefaultDaprGrpcPort = 50001
 )
 
 // Some kind of a root DI container
@@ -223,8 +225,16 @@ func encode[T object_storage.BindingProxy](eBox *encode_box.EncodeBox[T], req *e
 
 func makeDaprClient(maxRequestSizeMB int) (*client.Client, error) {
 	var opts []grpc.CallOption
+
+	// Getting dapr grpc port. By default, its 500001
+	port := DefaultDaprGrpcPort
+	// But the sidecar published a env variable with the real value
+	// So we can override the value if it's defined
+	if envPort, err := strconv.ParseInt(os.Getenv("DAPR_GRPC_PORT"), 10, 32); err != nil {
+		port = int(envPort)
+	}
 	opts = append(opts, grpc.MaxCallRecvMsgSize(maxRequestSizeMB*1024*1024))
-	conn, err := grpc.Dial(net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", DAPR_GRPC_PORT)),
+	conn, err := grpc.Dial(net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", port)),
 		grpc.WithDefaultCallOptions(opts...), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
