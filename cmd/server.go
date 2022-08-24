@@ -230,7 +230,7 @@ func makeDaprClient(maxRequestSizeMB int) (*client.Client, error) {
 	port := DefaultDaprGrpcPort
 	// But the sidecar published a env variable with the real value
 	// So we can override the value if it's defined
-	if envPort, err := strconv.ParseInt(os.Getenv("DAPR_GRPC_PORT"), 10, 32); err != nil {
+	if envPort, err := strconv.ParseInt(os.Getenv("DAPR_GRPC_PORT"), 10, 32); err != nil && envPort != 0 {
 		port = int(envPort)
 	}
 	opts = append(opts, grpc.MaxCallRecvMsgSize(maxRequestSizeMB*1024*1024))
@@ -256,7 +256,7 @@ func loadComponents() error {
 	}
 	maxReqSizeEnv := os.Getenv(DAPR_MAX_REQUEST_SIZE_MB)
 	maxRequestSize := DefaultDaprMaxRequestSize
-	if i, err := strconv.ParseInt(maxReqSizeEnv, 10, 32); err != nil {
+	if i, err := strconv.ParseInt(maxReqSizeEnv, 10, 32); err != nil && i != 0 {
 		maxRequestSize = int(i)
 	}
 	daprClient, err := makeDaprClient(maxRequestSize)
