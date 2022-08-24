@@ -132,6 +132,16 @@ spec:
 scopes:
   - encode-box
 ```
+## Limitations
+
+### On memory consumption
+
+For the time being, [Dapr doesn't support streaming](https://github.com/dapr/dapr/issues/4934). This means that both the
+application and the sidecar have to **buffer the files retrieved from the object storage in memory, as base64 strings**.
+
+Hence, the maximum memory the service can allocate is :
+ 2 * 4/3 * [size of assets]
+
 
 ## Deployment
 
