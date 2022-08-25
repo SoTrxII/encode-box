@@ -41,8 +41,11 @@ A valid job format for the **/encode** endpoint is the following:
   // Storage backend retrieval keys for the image track
   "imageKey":string,
   // All available options for encoding
-  "options":string,
-
+  "options":{ 
+   // Wether to delete used assets (videoKey, audioKeys and ImageKey) 
+   // from the remote object storage. Default is false
+    "deleteAssetsFromObjStore": boolean 
+   },
 }
 ```
 

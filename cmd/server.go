@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -112,7 +113,8 @@ func encodeSync[T object_storage.BindingProxy](w http.ResponseWriter, req *http.
 		return
 	}
 
-	// And clean up temp files. Downloaded assets are already cleaned up by the encode-box itself
+	// And clean up temp files on the container filesystem
+	// Downloaded assets are already cleaned up by the encode-box itself
 	log.Infof(`Removing working directory "%s" from the local filesystem`, workDir)
 	err = os.RemoveAll(workDir)
 	if err != nil {
@@ -120,6 +122,15 @@ func encodeSync[T object_storage.BindingProxy](w http.ResponseWriter, req *http.
 	}
 	log.Infof(`Processing of request with id "%s" complete !`, encodeRequest.RecordId)
 
+	// Optionally, we can also clean up the used assets from the remote object storage
+
+	if encodeRequest.Options.DeleteAssetsFromObjStore {
+		log.Infof("Removing used assets from remote object storage")
+		err = cleanUpFromObjectStore(encodeRequest, comp.objStore)
+		if err != nil {
+			log.Warnf(err.Error())
+		}
+	}
 	// Finally, ACK the message
 	_, _ = w.Write([]byte("OK"))
 }
@@ -160,6 +171,36 @@ func parseBody(from io.ReadCloser) (*encode_box.EncodingRequest, error) {
 		return nil, err
 	}
 	return &eReq, nil
+}
+
+func cleanUpFromObjectStore[T object_storage.BindingProxy](eReq *encode_box.EncodingRequest, objStore *object_storage.ObjectStorage[T]) error {
+	var failures []string
+	// Video
+	if eReq.VideoKey != "" {
+		err := objStore.Delete(eReq.VideoKey)
+		if err != nil {
+			failures = append(failures, eReq.VideoKey)
+		}
+	}
+	// Audio(s)
+	for _, key := range eReq.AudiosKeys {
+		err := objStore.Delete(key)
+		if err != nil {
+			failures = append(failures, key)
+		}
+	}
+	// Image
+	if eReq.ImageKey != "" {
+		err := objStore.Delete(eReq.ImageKey)
+		if err != nil {
+			failures = append(failures, eReq.ImageKey)
+		}
+	}
+
+	if len(failures) > 0 {
+		return fmt.Errorf(`failed to delete "%s" from remote object storage`, strings.Join(failures, ", "))
+	}
+	return nil
 }
 
 // Format a proper encoding request from a stream

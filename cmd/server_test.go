@@ -181,6 +181,51 @@ func TestMain_Encode(t *testing.T) {
 	assert.Contains(t, err.Error(), "Invalid data")
 }
 
+func TestMain_cleanUpFromObjectStoreOk(t *testing.T) {
+	ctx := context.Background()
+	dir, err := os.MkdirTemp("", "assets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctrl := gomock.NewController(t)
+	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
+	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
+	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
+	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
+	objectStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	eReq := encode_box.EncodingRequest{
+		VideoKey:   "",
+		AudiosKeys: []string{"a", "b"},
+		ImageKey:   "a",
+		Options:    encode_box.EncodingOptions{},
+	}
+	err = cleanUpFromObjectStore[*mock_object_storage.MockBindingProxy](&eReq, objectStore)
+	assert.Nil(t, err)
+}
+
+func TestMain_cleanUpFromObjectStoreError(t *testing.T) {
+	ctx := context.Background()
+	dir, err := os.MkdirTemp("", "assets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctrl := gomock.NewController(t)
+	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
+	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test"))
+	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test"))
+	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test"))
+	objectStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	eReq := encode_box.EncodingRequest{
+		VideoKey:   "",
+		AudiosKeys: []string{"a", "b"},
+		ImageKey:   "a",
+		Options:    encode_box.EncodingOptions{},
+	}
+	err = cleanUpFromObjectStore[*mock_object_storage.MockBindingProxy](&eReq, objectStore)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "a, b, a")
+}
+
 func TestMain_Healthz(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	w := httptest.NewRecorder()
@@ -335,6 +380,81 @@ func TestMain_NewEncodeRequest_Ok(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestMain_NewEncodeRequest_Ok_WithCleanup(t *testing.T) {
+	const (
+		vidKey = "v.mp4"
+		a1Key  = "a.m4a"
+		a2Key  = "b.m4a"
+	)
+	eReq := encode_box.EncodingRequest{
+		RecordId:   "1",
+		VideoKey:   vidKey,
+		AudiosKeys: []string{a1Key, a2Key},
+		ImageKey:   "",
+		Options:    encode_box.EncodingOptions{DeleteAssetsFromObjStore: true},
+	}
+	req, w, err := getMockedEncodingRequest(eReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Redirect calls to the backend storage to valid assets for each required assets in the request
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
+
+	// VidKey -> Sample video
+	videoContent, err := ioutil.ReadFile(filepath.Join(ResDir, "video.mp4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy.
+		EXPECT().
+		InvokeBinding(gomock.Any(), NewBidingMatcher(vidKey, "get")).
+		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(videoContent))}, nil)
+
+	// a1Key -> Sample audio
+	audio1Content, err := ioutil.ReadFile(filepath.Join(ResDir, "audio.m4a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy.
+		EXPECT().
+		InvokeBinding(gomock.Any(), NewBidingMatcher("a.m4a", "get")).
+		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio1Content))}, nil)
+
+	// a2Key -> Sample audio
+	audio2Content, err := ioutil.ReadFile(filepath.Join(ResDir, "audio.m4a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy.EXPECT().
+		InvokeBinding(gomock.Any(), NewBidingMatcher("b.m4a", "get")).
+		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio2Content))}, nil)
+
+	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
+	proxy.EXPECT().
+		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.RecordId), "create")).
+		Return(&client.BindingEvent{}, nil)
+
+	// And except any number of deletion request
+	proxy.EXPECT().
+		InvokeBinding(gomock.Any(), NewBidingMatcher("*", "delete")).
+		Return(&client.BindingEvent{}, nil).
+		AnyTimes()
+
+	dir, err := os.MkdirTemp("", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	eBox := encode_box.NewEncodeBox(&ctx, objStore)
+	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
+		eBox:     eBox,
+		objStore: objStore,
+	})
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestMain_NewEncodeRequest_EncodingError(t *testing.T) {
 	const (
 		vidKey = "v.mp4"
@@ -441,7 +561,6 @@ func TestMain_NewEncodeRequest_UploadError(t *testing.T) {
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.RecordId), "create")).
 		Return(&client.BindingEvent{}, fmt.Errorf("test"))
-
 	dir, err := os.MkdirTemp("", "test")
 	if err != nil {
 		t.Fatal(err)
@@ -494,7 +613,8 @@ func (m *bindingMatcher) Matches(x interface{}) bool {
 	if req.Operation != m.operation {
 		return false
 	}
-	if req.Metadata["key"] != m.name {
+	// If the name is a wildcard, accept anything
+	if m.name != "*" && req.Metadata["key"] != m.name {
 		return false
 	}
 	return true

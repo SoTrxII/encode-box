@@ -171,5 +171,8 @@ type EncodingRequest struct {
 	Options EncodingOptions `json:"options"`
 }
 
+// EncodingOptions All valid encoding options
 type EncodingOptions struct {
+	// Clean up used video/audio/images assets if the encoding succeeded
+	DeleteAssetsFromObjStore bool `json:"deleteAssetsFromObjStore"`
 }

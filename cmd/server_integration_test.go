@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	encode_box "encode-box/pkg/encode-box"
+	object_storage "encode-box/pkg/object-storage"
 	"encoding/base64"
 	"fmt"
 	"github.com/dapr/go-sdk/client"
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	ResDir = "../resources/test"
+	ObjStoreComponent = "object-store"
 )
 
 // These are integration test, using all real components
@@ -49,10 +50,8 @@ func SetupInt(t *testing.T) (string, *encode_box.EncodeBox[client.Client]) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eBox, err := makeEncodeBox(&ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	objStore, err := object_storage.NewDaprObjectStorage(&ctx, &daprClient, ObjStoreComponent)
+	eBox := encode_box.NewEncodeBox(&ctx, objStore)
 	return dir, eBox
 }
 
