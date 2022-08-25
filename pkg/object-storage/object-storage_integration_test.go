@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 // Integration testing for object-storage. Dapr must be booted up for this to run
 package object_storage
 
