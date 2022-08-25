@@ -34,7 +34,7 @@ func TestObjectStorage_Download(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	daprClient := mock_client.NewMockClient(ctrl)
 	//testFile := path.Join(ResPath, "test.txt")
-	testFileContent, err := ioutil.ReadFile(path.Join(ResPath, "test.txt"))
+	testFileContent, err := os.ReadFile(path.Join(ResPath, "test.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestObjectStorage_Download(t *testing.T) {
 		ctx:           &ctx,
 	}
 	path, _ := od.Download("test.txt")
-	writtenFileContent, err := ioutil.ReadFile(*path)
+	writtenFileContent, err := os.ReadFile(*path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestObjectStorage_DeleteError(t *testing.T) {
 // non-streaming way
 func TestObjectStorage_readFileToB64(t *testing.T) {
 	path := path.Join(ResPath, "test.txt")
-	content, err := ioutil.ReadFile(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}

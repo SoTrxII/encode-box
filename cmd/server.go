@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -79,8 +78,8 @@ func encodeSync[T object_storage.BindingProxy](w http.ResponseWriter, req *http.
 	// Check the format of the encode request...
 
 	// Do not consume the body, instead make a copy of it
-	contents, _ := ioutil.ReadAll(req.Body)
-	bodyCopy := ioutil.NopCloser(bytes.NewReader(contents))
+	contents, _ := io.ReadAll(req.Body)
+	bodyCopy := io.NopCloser(bytes.NewReader(contents))
 	defer bodyCopy.Close()
 	encodeRequest, err := makeEncodingRequest(bodyCopy)
 	if err != nil {
@@ -146,9 +145,9 @@ func parseBody(from io.ReadCloser) (*encode_box.EncodingRequest, error) {
 	// Two types of body have to be supported : a dapr event or a raw body
 
 	// Duplicate the body to be able to read from it twice
-	contents, _ := ioutil.ReadAll(from)
-	fromCopy := ioutil.NopCloser(bytes.NewReader(contents))
-	fromCopy2 := ioutil.NopCloser(bytes.NewReader(contents))
+	contents, _ := io.ReadAll(from)
+	fromCopy := io.NopCloser(bytes.NewReader(contents))
+	fromCopy2 := io.NopCloser(bytes.NewReader(contents))
 	defer fromCopy.Close()
 	defer fromCopy2.Close()
 
@@ -271,7 +270,7 @@ func makeDaprClient(maxRequestSizeMB int) (*client.Client, error) {
 	port := DefaultDaprGrpcPort
 	// But the sidecar published a env variable with the real value
 	// So we can override the value if it's defined
-	if envPort, err := strconv.ParseInt(os.Getenv("DAPR_GRPC_PORT"), 10, 32); err != nil && envPort != 0 {
+	if envPort, err := strconv.ParseInt(os.Getenv(DAPR_GRPC_PORT), 10, 32); err != nil && envPort != 0 {
 		port = int(envPort)
 	}
 	opts = append(opts, grpc.MaxCallRecvMsgSize(maxRequestSizeMB*1024*1024))

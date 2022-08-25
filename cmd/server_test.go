@@ -12,7 +12,6 @@ import (
 	"github.com/dapr/go-sdk/client"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -334,7 +333,7 @@ func TestMain_NewEncodeRequest_Ok(t *testing.T) {
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 
 	// VidKey -> Sample video
-	videoContent, err := ioutil.ReadFile(filepath.Join(ResDir, "video.mp4"))
+	videoContent, err := os.ReadFile(filepath.Join(ResDir, "video.mp4"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +343,7 @@ func TestMain_NewEncodeRequest_Ok(t *testing.T) {
 		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(videoContent))}, nil)
 
 	// a1Key -> Sample audio
-	audio1Content, err := ioutil.ReadFile(filepath.Join(ResDir, "audio.m4a"))
+	audio1Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +353,7 @@ func TestMain_NewEncodeRequest_Ok(t *testing.T) {
 		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio1Content))}, nil)
 
 	// a2Key -> Sample audio
-	audio2Content, err := ioutil.ReadFile(filepath.Join(ResDir, "audio.m4a"))
+	audio2Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +402,7 @@ func TestMain_NewEncodeRequest_Ok_WithCleanup(t *testing.T) {
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 
 	// VidKey -> Sample video
-	videoContent, err := ioutil.ReadFile(filepath.Join(ResDir, "video.mp4"))
+	videoContent, err := os.ReadFile(filepath.Join(ResDir, "video.mp4"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -413,7 +412,7 @@ func TestMain_NewEncodeRequest_Ok_WithCleanup(t *testing.T) {
 		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(videoContent))}, nil)
 
 	// a1Key -> Sample audio
-	audio1Content, err := ioutil.ReadFile(filepath.Join(ResDir, "audio.m4a"))
+	audio1Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +422,7 @@ func TestMain_NewEncodeRequest_Ok_WithCleanup(t *testing.T) {
 		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio1Content))}, nil)
 
 	// a2Key -> Sample audio
-	audio2Content, err := ioutil.ReadFile(filepath.Join(ResDir, "audio.m4a"))
+	audio2Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -529,7 +528,7 @@ func TestMain_NewEncodeRequest_UploadError(t *testing.T) {
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 
 	// VidKey -> Sample video
-	videoContent, err := ioutil.ReadFile(filepath.Join(ResDir, "video.mp4"))
+	videoContent, err := os.ReadFile(filepath.Join(ResDir, "video.mp4"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -539,7 +538,7 @@ func TestMain_NewEncodeRequest_UploadError(t *testing.T) {
 		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(videoContent))}, nil)
 
 	// a1Key -> Sample audio
-	audio1Content, err := ioutil.ReadFile(filepath.Join(ResDir, "audio.m4a"))
+	audio1Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -549,7 +548,7 @@ func TestMain_NewEncodeRequest_UploadError(t *testing.T) {
 		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio1Content))}, nil)
 
 	// a2Key -> Sample audio
-	audio2Content, err := ioutil.ReadFile(filepath.Join(ResDir, "audio.m4a"))
+	audio2Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
 	if err != nil {
 		t.Fatal(err)
 	}

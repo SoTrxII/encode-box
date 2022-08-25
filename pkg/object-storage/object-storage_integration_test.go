@@ -66,11 +66,11 @@ func (s *e2eTestSuite) TestDownload_Int() {
 	if err != nil {
 		s.T().Fatal(err)
 	}
-	actual, err := ioutil.ReadFile(*expectedPath)
+	actual, err := os.ReadFile(*expectedPath)
 	if err != nil {
 		s.T().Fatal(err)
 	}
-	expected, err := ioutil.ReadFile(path.Join(ResPath, TestDownloadAssetKey))
+	expected, err := os.ReadFile(path.Join(ResPath, TestDownloadAssetKey))
 
 	assert.Equal(s.T(), string(expected), string(actual))
 }
@@ -116,7 +116,7 @@ func TestE2ETestSuite(t *testing.T) {
 }
 
 func copy(daprClient *client.Client, src string, keyName string) error {
-	rawContent, err := ioutil.ReadFile(src)
+	rawContent, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}

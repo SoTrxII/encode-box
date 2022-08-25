@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/dapr/go-sdk/client"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -109,7 +108,7 @@ Loop:
 }
 
 func copy(daprClient *client.Client, src string, keyName string) error {
-	rawContent, err := ioutil.ReadFile(src)
+	rawContent, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
