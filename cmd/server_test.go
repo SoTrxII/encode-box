@@ -83,8 +83,7 @@ func TestMain_MakeEncodingRequest_NoVideo(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
 	_, err = makeEncodingRequest(req.Body)
-	fmt.Println(err.Error())
-	assert.NotNil(t, err)
+	assert.Nil(t, err)
 }
 
 func TestMain_MakeEncodingRequest_NoAudio(t *testing.T) {
