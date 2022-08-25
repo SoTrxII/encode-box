@@ -215,9 +215,6 @@ func makeEncodingRequest(from io.ReadCloser) (*encode_box.EncodingRequest, error
 	if eReq.RecordId == "" {
 		return nil, fmt.Errorf("no record id provided ")
 	}
-	if len(eReq.VideoKey) == 0 && len(eReq.ImageKey) == 0 {
-		return nil, fmt.Errorf("no video track provided ")
-	}
 	if len(eReq.AudiosKeys) == 0 {
 		return nil, fmt.Errorf("no audio track provided")
 	}

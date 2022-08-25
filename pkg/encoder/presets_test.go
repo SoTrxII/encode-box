@@ -72,6 +72,26 @@ func TestEncodeBox_getAudiosImage_MultipleAudios(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+// Testing an encoding with a placeholder used as a video track and a single audio track
+func TestEncodeBox_getAudiosOnly_SingleAudio(t *testing.T) {
+	dir, out := Setup(t)
+	defer Teardown(t, dir)
+	ctx := context.Background()
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1}, out)
+	err = runEncoding(t, enc)
+	assert.Nil(t, err)
+}
+
+// Testing an encoding with a placeholder used as a video track and multiples audio tracks
+func TestEncodeBox_getAudiosOnly_MultipleAudios(t *testing.T) {
+	dir, out := Setup(t)
+	defer Teardown(t, dir)
+	ctx := context.Background()
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1, TestAudio2, TestAudio3}, out)
+	err = runEncoding(t, enc)
+	assert.Nil(t, err)
+}
+
 // Deletes the created temp directory
 func Teardown(t *testing.T, dir string) {
 	err := os.RemoveAll(dir)

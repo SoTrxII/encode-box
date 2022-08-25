@@ -17,7 +17,7 @@ The encoding itself is a 4 step process :
 1. A new job is received as an HTTP request containing [an encoding job](#job-format)
 2. A job will contains references to assets located in the remote object storage. These assets are downloaded on the local file system
 3. Using FFMPEG, the encoding is performed. While encoding, [progress events](#progress-event) are emitted on the specified topic of the event broker (see [configuration](#configuration))
-4. Once the encoding is finished, the resulting video is uploaded back onto the remote object storage. All downloaded/created file are deleted after this.
+4. Once the encoding is finished, the resulting video is uploaded back onto the remote object storage. All downloaded/created files are deleted after this.
 ![architecture](./resources/images/high-level-architecture.png)
 
 
@@ -56,7 +56,10 @@ A valid job is either :
   - The result will use the video input video and the mixed audio 
 + 0 video, 1 or more audio(s) and 1 image. In which case :
   - The audios tracks will be concatenated
-  - The result will use the looped image as the video track and the concatenated audio as the audio trac
+  - The result will use the looped image as the video track and the concatenated audio as the audio track
++ 0 video, 1 or more audio(s) and 0 image. In which case :
+  - The audios tracks will be concatenated
+  - The result will use a black background as the video track and the concatenated audio as the audio track
 
 Be aware that this endpoint is **entirely synchronous**, a 200 OK response will only be fired **after
 the encoding itself finished**. 

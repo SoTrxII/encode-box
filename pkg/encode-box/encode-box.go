@@ -147,6 +147,8 @@ func (eb *EncodeBox[T]) setupEnc(req *EncodingRequest, assets *AssetCollection, 
 	} else if req.ImageKey != "" && req.VideoKey == "" {
 		// Or an image/video encoder
 		enc, err = encoder.GetAudiosImageEnc(&eb.Ctx, assets.ImagesPaths()[0], assets.AudiosPaths(), output)
+	} else if req.ImageKey == "" && req.VideoKey == "" {
+		enc, err = encoder.GetAudiosOnlyEnc(&eb.Ctx, assets.AudiosPaths(), output)
 	} else {
 		// If an unsupported assets set is passed, don't event try and error out
 		return nil, fmt.Errorf("no suitable encoder found for %+v", req)

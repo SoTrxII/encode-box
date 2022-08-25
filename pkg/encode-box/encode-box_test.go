@@ -78,7 +78,7 @@ func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
 	_, err = eBox.setupEnc(req, aCol, "testoutput")
 	assert.Nil(t, err)
 
-	// O video track, multiple audio track, 0 image tracks -> Error
+	// O video track, multiple audio track, 0 image tracks -> AudioOnlyEnv
 	req = &EncodingRequest{
 		VideoKey:   "",
 		AudiosKeys: []string{"d"},
@@ -87,13 +87,13 @@ func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
 	}
 	aCol = getAssetsCollection(0, 3, 0)
 	_, err = eBox.setupEnc(req, aCol, "testoutput")
-	assert.NotNil(t, err)
+	assert.Nil(t, err)
 
 	// 1 video track, multiple audio track, 1 image tracks -> Error
 	req = &EncodingRequest{
-		VideoKey:   "",
+		VideoKey:   "a",
 		AudiosKeys: []string{"d"},
-		ImageKey:   "",
+		ImageKey:   "a",
 		Options:    EncodingOptions{},
 	}
 	aCol = getAssetsCollection(1, 3, 1)
@@ -102,8 +102,8 @@ func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
 
 	// 1 video track, 0 audio track, 0 image tracks -> Error
 	req = &EncodingRequest{
-		VideoKey:   "",
-		AudiosKeys: []string{"d"},
+		VideoKey:   "a",
+		AudiosKeys: []string{},
 		ImageKey:   "",
 		Options:    EncodingOptions{},
 	}

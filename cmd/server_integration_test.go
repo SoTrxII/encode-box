@@ -44,6 +44,10 @@ func SetupInt(t *testing.T) (string, *encode_box.EncodeBox[client.Client]) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = copy(&daprClient, filepath.Join(ResDir, "test.jpg"), "image")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	dir, err := os.MkdirTemp("", "test-encode-int")
 	if err != nil {
@@ -73,7 +77,44 @@ func TestMain_Encode_AudioVideo_Int(t *testing.T) {
 	}
 	fmt.Println(dir)
 }
-
+func TestMain_Encode_AudioImage_Int(t *testing.T) {
+	dir, eBox := SetupInt(t)
+	req := encode_box.EncodingRequest{
+		VideoKey:   "",
+		AudiosKeys: []string{"audio", "audio2", "audio3"},
+		ImageKey:   "image",
+		Options:    encode_box.EncodingOptions{},
+	}
+	// Make temp dir for output
+	dir, err := os.MkdirTemp("", "encode-instance")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err, _ = encode[client.Client](eBox, &req, filepath.Join(dir, "out.mp4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(dir)
+}
+func TestMain_Encode_AudioOnly_Int(t *testing.T) {
+	dir, eBox := SetupInt(t)
+	req := encode_box.EncodingRequest{
+		VideoKey:   "",
+		AudiosKeys: []string{"audio", "audio2", "audio3"},
+		ImageKey:   "",
+		Options:    encode_box.EncodingOptions{},
+	}
+	// Make temp dir for output
+	dir, err := os.MkdirTemp("", "encode-instance")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err, _ = encode[client.Client](eBox, &req, filepath.Join(dir, "out.mp4"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(dir)
+}
 func copy(daprClient *client.Client, src string, keyName string) error {
 	rawContent, err := os.ReadFile(src)
 	if err != nil {

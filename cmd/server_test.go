@@ -448,6 +448,64 @@ func TestMain_NewEncodeRequest_AudioImage_Ok(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestMain_NewEncodeRequest_AudioOnly_Ok(t *testing.T) {
+	const (
+		a1Key = "a.m4a"
+		a2Key = "b.m4a"
+	)
+	eReq := encode_box.EncodingRequest{
+		RecordId:   "1",
+		VideoKey:   "",
+		AudiosKeys: []string{a1Key, a2Key},
+		ImageKey:   "",
+		Options:    encode_box.EncodingOptions{},
+	}
+	req, w, err := getMockedEncodingRequest(eReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Redirect calls to the backend storage to valid assets for each required assets in the request
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
+
+	// a1Key -> Sample audio
+	audio1Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy.
+		EXPECT().
+		InvokeBinding(gomock.Any(), NewBidingMatcher("a.m4a", "get")).
+		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio1Content))}, nil)
+
+	// a2Key -> Sample audio
+	audio2Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy.EXPECT().
+		InvokeBinding(gomock.Any(), NewBidingMatcher("b.m4a", "get")).
+		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio2Content))}, nil)
+
+	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
+	proxy.EXPECT().
+		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.RecordId), "create")).
+		Return(&client.BindingEvent{}, nil)
+
+	dir, err := os.MkdirTemp("", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	eBox := encode_box.NewEncodeBox(&ctx, objStore)
+	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
+		eBox:     eBox,
+		objStore: objStore,
+	})
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestMain_NewEncodeRequest_Ok_WithCleanup(t *testing.T) {
 	const (
 		vidKey = "v.mp4"

@@ -108,3 +108,57 @@ func GetAudiosImageEnc(ctx *context.Context, imagePath string, audioPaths []stri
 
 	return builder.Build(ctx)
 }
+
+// GetAudiosOnlyEnc Return an initialized encoder with a black background and multiple audio tracks
+// If multiple audios are specified, they will be concatenated
+// The resulting video will have a black background over the video audio track
+func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, output string) (*Encoder, error) {
+	builder := Builder{}
+	// video track
+	builder.AddInput(&FileInput{Path: "color=black:s=1280x720:r=25", Format: "lavfi"})
+	var graphRoot filtergraph.Filter
+
+	// audio tracks
+	if len(audioPaths) == 1 {
+		// Only one audio track, NO-OP
+		builder.AddInput(&FileInput{Path: audioPaths[0]})
+		graphRoot = filtergraph.NewInput("1")
+	} else {
+		// If multiple tracks are specified, concat them
+		var aFilterInput []filtergraph.Filter
+		for i, aPath := range audioPaths {
+			builder.AddInput(&FileInput{Path: aPath})
+			// Add a new audio track input indexed by one (0 being the video track)
+			aTrack := filtergraph.NewInput(fmt.Sprintf("%d", i+1))
+			aFilterInput = append(aFilterInput, aTrack)
+		}
+		graphRoot = filtergraph.NewAudioConcatFilter(aFilterInput...)
+
+	}
+	// In any way, normalize...
+	graphRoot = filtergraph.NewAudioNormalizationFilter(graphRoot)
+
+	// ... and resample the resulting audio
+	graphRoot = filtergraph.NewAudioResampleFilter(graphRoot, filtergraph.K44)
+
+	// And assign the graph to the command
+	builder.SetFilterGraph(graphRoot)
+
+	// Add general options
+	builder.
+		// Set the pixel space
+		AddOutputOption("-pix_fmt yuv420p").
+		// Set the codec to be used
+		AddOutputOption("-c:v libx264").
+		// As we are using a static image, we can configure x264 to optimize for it
+		AddOutputOption("-tune stillimage").
+		// And end the video at the shortest input (the audio)
+		AddOutputOption("-shortest")
+	// Map the output -> Take the video from the only video source and the audio from the normalized audio track
+	builder.AddOutputOption("-map 0:v").AddOutputOption(fmt.Sprintf("-map [%s]", graphRoot.Id()))
+
+	// Set the output of the encoder
+	builder.SetOutput(output)
+
+	return builder.Build(ctx)
+}
