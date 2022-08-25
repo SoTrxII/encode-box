@@ -15,6 +15,7 @@ const (
 
 var (
 	TestVideo  = path.Join(ResPath, "/video.mp4")
+	TestImage  = path.Join(ResPath, "/test.jpg")
 	TestAudio1 = path.Join(ResPath, "/audio.m4a")
 	TestAudio2 = path.Join(ResPath, "/audio.m4a")
 	TestAudio3 = path.Join(ResPath, "/audio.m4a")
@@ -53,14 +54,22 @@ func TestEncodeBox_GetAudiosVideo_MultipleAudios(t *testing.T) {
 
 // Testing an encoding with an image used as a video track and a single audio track
 func TestEncodeBox_getAudiosImage_SingleAudio(t *testing.T) {
-	// TODO
-	t.Skip()
+	dir, out := Setup(t)
+	defer Teardown(t, dir)
+	ctx := context.Background()
+	enc, err := GetAudiosImageEnc(&ctx, TestImage, []string{TestAudio1}, out)
+	err = runEncoding(t, enc)
+	assert.Nil(t, err)
 }
 
 // Testing an encoding with an image used as a video track and multiples audio tracks
 func TestEncodeBox_getAudiosImage_MultipleAudios(t *testing.T) {
-	// TODO
-	t.Skip()
+	dir, out := Setup(t)
+	defer Teardown(t, dir)
+	ctx := context.Background()
+	enc, err := GetAudiosImageEnc(&ctx, TestImage, []string{TestAudio1, TestAudio2, TestAudio3}, out)
+	err = runEncoding(t, enc)
+	assert.Nil(t, err)
 }
 
 // Deletes the created temp directory

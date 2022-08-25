@@ -49,6 +49,15 @@ A valid job format for the **/encode** endpoint is the following:
 }
 ```
 
+A valid job is either :
++ 1 video, 1 or more audio(s) and 0 image. In which case :
+  - The audios tracks will be concatenated
+  - The resulting concatenated audio track will be mixed with the video input audio track, using FFMPEG's [sidechannel](https://ffmpeg.org/ffmpeg-filters.html#sidechaincompress) so that the concatenated audio can always over the video input audio
+  - The result will use the video input video and the mixed audio 
++ 0 video, 1 or more audio(s) and 1 image. In which case :
+  - The audios tracks will be concatenated
+  - The result will use the looped image as the video track and the concatenated audio as the audio trac
+
 Be aware that this endpoint is **entirely synchronous**, a 200 OK response will only be fired **after
 the encoding itself finished**. 
 Depending on your hardware, this can be a multiple hours operation.
