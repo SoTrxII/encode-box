@@ -2,7 +2,7 @@
 ####################################################################################################
 ## Builder
 ####################################################################################################
-FROM golang:alpine as builder
+FROM golang:1.19-alpine as builder
 WORKDIR /app
 COPY . .
 # Build the app, strip it (LDFLAGS) and optimize it with UPX
