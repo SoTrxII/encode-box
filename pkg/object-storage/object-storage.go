@@ -55,17 +55,17 @@ type BindingProxy interface {
 }
 
 // Download a file from the backend storage
-func (od ObjectStorage[T]) Download(id string) (path *string, err error) {
+func (od ObjectStorage[T]) Download(key string) (path *string, err error) {
 	res, err := (*od.client).InvokeBinding(*od.ctx, &client.InvokeBindingRequest{
 		Name:      od.componentName,
 		Operation: "get",
 		Data:      nil,
-		Metadata:  map[string]string{"key": id},
+		Metadata:  map[string]string{"key": key},
 	})
 	if err != nil {
 		return nil, err
 	}
-	writePath := filepath.Join(od.assetsPath, id)
+	writePath := filepath.Join(od.assetsPath, key)
 	input := bytes.NewBuffer(res.Data)
 	decoder := base64.NewDecoder(base64.StdEncoding, input)
 	output, err := os.Create(writePath)
@@ -95,6 +95,19 @@ func (od ObjectStorage[T]) Upload(path string, key string) error {
 		return err
 	}
 	return nil
+}
+
+// Delete a file in the remote object storage
+func (od ObjectStorage[T]) Delete(key string) error {
+	_, err := (*od.client).InvokeBinding(*od.ctx, &client.InvokeBindingRequest{
+		Name:      od.componentName,
+		Operation: "delete",
+		Data:      nil,
+		Metadata: map[string]string{
+			"key": key,
+		},
+	})
+	return err
 }
 
 // Read a file into a base64 bytes-array

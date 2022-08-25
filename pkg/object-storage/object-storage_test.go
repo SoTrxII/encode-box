@@ -4,6 +4,7 @@ import (
 	"context"
 	mock_client "encode-box/internal/mock/dapr"
 	"encoding/base64"
+	"fmt"
 	"github.com/dapr/go-sdk/client"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -76,6 +77,48 @@ func TestObjectStorage_Upload(t *testing.T) {
 	}
 	err := od.Upload(path.Join(ResPath, "test.txt"), "key")
 	assert.Nil(t, err)
+}
+
+func TestObjectStorage_DeleteOk(t *testing.T) {
+	dir := Setup(t)
+	defer Teardown(t, dir)
+
+	// And creates a new resource
+	ctrl := gomock.NewController(t)
+	daprClient := mock_client.NewMockClient(ctrl)
+	daprClient.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: nil}, nil)
+
+	//
+	ctx := context.Background()
+	od := ObjectStorage[*mock_client.MockClient]{
+		assetsPath:    dir,
+		componentName: "test",
+		client:        &daprClient,
+		ctx:           &ctx,
+	}
+	err := od.Delete("key")
+	assert.Nil(t, err)
+}
+
+func TestObjectStorage_DeleteError(t *testing.T) {
+	dir := Setup(t)
+	defer Teardown(t, dir)
+
+	// And creates a new resource
+	ctrl := gomock.NewController(t)
+	daprClient := mock_client.NewMockClient(ctrl)
+	daprClient.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test"))
+
+	//
+	ctx := context.Background()
+	od := ObjectStorage[*mock_client.MockClient]{
+		assetsPath:    dir,
+		componentName: "test",
+		client:        &daprClient,
+		ctx:           &ctx,
+	}
+	err := od.Delete("key")
+	assert.NotNil(t, err)
 }
 
 // Check that the streamijng way to build the B64 signature is identical to the

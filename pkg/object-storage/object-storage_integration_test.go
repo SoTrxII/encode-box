@@ -1,6 +1,3 @@
-//go:build integration
-// +build integration
-
 // Integration testing for object-storage. Dapr must be booted up for this to run
 package object_storage
 
@@ -19,7 +16,12 @@ import (
 const (
 	BucketPath    = "../../resources/bucket/"
 	DaprComponent = "object-store"
-	TestAssetName = "test.txt"
+	// Name of the file used for testing
+	TestFileName = "test.txt"
+	// Name of the asset used to test download
+	TestDownloadAssetKey = "testdl"
+	// Name of the asset used to test deletion
+	TestDeleteAssetKey = "testdelete"
 )
 
 type e2eTestSuite struct {
@@ -42,7 +44,8 @@ func (s *e2eTestSuite) SetupSuite() {
 	s.client = daprClient
 	ctx := context.Background()
 	// Copy a file in the bucket directory to download it later
-	err = copy(&s.client, path.Join(ResPath, TestAssetName), TestAssetName)
+	err = copy(&s.client, path.Join(ResPath, TestFileName), TestDownloadAssetKey)
+	err = copy(&s.client, path.Join(ResPath, TestFileName), TestDeleteAssetKey)
 	if err != nil {
 		s.Fail(err.Error())
 	}
@@ -56,7 +59,7 @@ func (s *e2eTestSuite) SetupSuite() {
 }
 
 func (s *e2eTestSuite) TestDownload_Int() {
-	expectedPath, err := s.objStore.Download(TestAssetName)
+	expectedPath, err := s.objStore.Download(TestDownloadAssetKey)
 	if err != nil {
 		s.T().Fatal(err)
 	}
@@ -64,7 +67,7 @@ func (s *e2eTestSuite) TestDownload_Int() {
 	if err != nil {
 		s.T().Fatal(err)
 	}
-	expected, err := ioutil.ReadFile(path.Join(ResPath, TestAssetName))
+	expected, err := ioutil.ReadFile(path.Join(ResPath, TestDownloadAssetKey))
 
 	assert.Equal(s.T(), string(expected), string(actual))
 }
@@ -84,6 +87,25 @@ func (s *e2eTestSuite) TestUpload_Int() {
 	if err != nil {
 		s.T().Fatal(err)
 	}
+}
+
+func (s *e2eTestSuite) TestDelete_Int() {
+	// Check that the file can be downloaded
+	_, err := s.objStore.Download(TestDeleteAssetKey)
+	if err != nil {
+		s.T().Fatal(err)
+	}
+	// Then delete it
+	err = s.objStore.Delete(TestDeleteAssetKey)
+	if err != nil {
+		s.T().Fatal(err)
+	}
+	// And check that it cannot be downloaded anymore
+	res, err := s.objStore.Download(TestDeleteAssetKey)
+	if err == nil {
+		s.T().Fatal(err)
+	}
+	_ = res
 }
 
 func TestE2ETestSuite(t *testing.T) {
