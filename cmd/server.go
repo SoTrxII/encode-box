@@ -221,6 +221,12 @@ func makeEncodingRequest(from io.ReadCloser) (*encode_box.EncodingRequest, error
 	return eReq, nil
 }
 
+// Fired when an error occured while encoding a video
+type encodeError struct {
+	// Error message
+	Message string `json:message`
+}
+
 // Fire a new encoding
 func encode[T object_storage.BindingProxy](eBox *encode_box.EncodeBox[T], req *encode_box.EncodingRequest, output string) (error, int) {
 	// Fire the encoding and wait for it to finish/error
@@ -230,9 +236,9 @@ func encode[T object_storage.BindingProxy](eBox *encode_box.EncodeBox[T], req *e
 		case e := <-eBox.EChan:
 			if broker != nil {
 				broker.SendProgress(progress_broker.EncodeInfos{
-					RecordId:    req.RecordId,
-					EncodeState: progress_broker.Error,
-					Data:        e,
+					RecordId: req.RecordId,
+					State:    progress_broker.Error,
+					Data:     encodeError{Message: e.Error()},
 				})
 			}
 
@@ -242,17 +248,17 @@ func encode[T object_storage.BindingProxy](eBox *encode_box.EncodeBox[T], req *e
 			fmt.Printf("%+v", p)
 			if broker != nil {
 				broker.SendProgress(progress_broker.EncodeInfos{
-					RecordId:    req.RecordId,
-					EncodeState: progress_broker.InProgress,
-					Data:        p,
+					RecordId: req.RecordId,
+					State:    progress_broker.InProgress,
+					Data:     p,
 				})
 			}
 		case <-eBox.Ctx.Done():
 			if broker != nil {
 				broker.SendProgress(progress_broker.EncodeInfos{
-					RecordId:    req.RecordId,
-					EncodeState: progress_broker.Done,
-					Data:        nil,
+					RecordId: req.RecordId,
+					State:    progress_broker.Done,
+					Data:     nil,
 				})
 			}
 			return nil, http.StatusOK

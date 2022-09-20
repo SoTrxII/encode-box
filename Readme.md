@@ -76,7 +76,7 @@ While encoding, if any event broker is configured, the encode-box will periodica
     // Record id of the currently processed record
     recordId: string,
     // Either 0 -> "In progress", 1 -> "Done", 2 -> "Error"
-    encodeState: iota,
+    state: iota,
     // Depends on the encode state
     data: <> 
 }
