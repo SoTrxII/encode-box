@@ -1,7 +1,7 @@
 # Encode box
 ![CI](https://github.com/SoTrxII/encode-box/actions/workflows/publish-coverage.yml/badge.svg)
 [![codecov](https://codecov.io/gh/SoTrxII/encode-box/branch/master/graph/badge.svg?token=Y4HHS5Q13N)](https://codecov.io/gh/SoTrxII/encode-box)
-[![Docker Image Size](https://badgen.net/docker/size/sotrx/encode-box/0.1.0?icon=docker&label=encode-box)](https://hub.docker.com/r/sotrx/encode-box/)
+[![Docker Image Size](https://badgen.net/docker/size/sotrx/encode-box/1.1.0?icon=docker&label=encode-box)](https://hub.docker.com/r/sotrx/encode-box/)
 
 
 Encode-box is an asynchronous encoding server. Its goal takes videos/audios/images assets from a remote object storage ,
