@@ -162,7 +162,7 @@ func (eb *EncodeBox[T]) setupEnc(req *EncodingRequest, assets *AssetCollection, 
 
 type EncodingRequest struct {
 	// Record UUID
-	RecordId string `json:"recordId"`
+	JobId string `json:"jobId"`
 	// Storage backend keys for all videos tracks
 	VideoKey string `json:"videoKey"`
 	// Storage backend keys for all audio tracks

@@ -44,7 +44,7 @@ func TestMain_MakeEncodingRequest_EmptyBody(t *testing.T) {
 func TestMain_MakeEncodingRequest_NoId(t *testing.T) {
 	body := bytes.Buffer{}
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "",
+		JobId:      "",
 		VideoKey:   "a",
 		AudiosKeys: []string{"&"},
 		ImageKey:   "",
@@ -67,7 +67,7 @@ func TestMain_MakeEncodingRequest_NoId(t *testing.T) {
 func TestMain_MakeEncodingRequest_NoVideo(t *testing.T) {
 	body := bytes.Buffer{}
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   "",
 		AudiosKeys: []string{"a"},
 		ImageKey:   "",
@@ -89,7 +89,7 @@ func TestMain_MakeEncodingRequest_NoVideo(t *testing.T) {
 func TestMain_MakeEncodingRequest_NoAudio(t *testing.T) {
 	body := bytes.Buffer{}
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   "a",
 		AudiosKeys: nil,
 		ImageKey:   "",
@@ -111,7 +111,7 @@ func TestMain_MakeEncodingRequest_NoAudio(t *testing.T) {
 func TestMain_MakeEncodingRequest_Ok_AudioVideo(t *testing.T) {
 	body := bytes.Buffer{}
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   "a",
 		AudiosKeys: []string{"a", "b"},
 		ImageKey:   "",
@@ -133,7 +133,7 @@ func TestMain_MakeEncodingRequest_Ok_AudioVideo(t *testing.T) {
 func TestMain_MakeEncodingRequest_Ok_AudioImage(t *testing.T) {
 	body := bytes.Buffer{}
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   "",
 		AudiosKeys: []string{"a", "b"},
 		ImageKey:   "a",
@@ -253,7 +253,7 @@ func TestMain_NewEncodeRequest_DaprEvent(t *testing.T) {
 		Type:  "dapr",
 		Topic: "encode",
 		Data: encode_box.EncodingRequest{
-			RecordId:   "1",
+			JobId:      "1",
 			VideoKey:   "d",
 			AudiosKeys: []string{"a", "b"},
 			ImageKey:   "",
@@ -270,7 +270,7 @@ func TestMain_NewEncodeRequest_DaprEvent(t *testing.T) {
 func TestMain_NewEncodeRequest_RawRequest(t *testing.T) {
 	body := bytes.Buffer{}
 	rawReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   "d",
 		AudiosKeys: []string{"a", "b"},
 		ImageKey:   "",
@@ -316,7 +316,7 @@ func TestMain_NewEncodeRequest_AudioVideo_Ok(t *testing.T) {
 		a2Key  = "b.m4a"
 	)
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   vidKey,
 		AudiosKeys: []string{a1Key, a2Key},
 		ImageKey:   "",
@@ -362,7 +362,7 @@ func TestMain_NewEncodeRequest_AudioVideo_Ok(t *testing.T) {
 
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
-		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.RecordId), "create")).
+		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.JobId), "create")).
 		Return(&client.BindingEvent{}, nil)
 
 	dir, err := os.MkdirTemp("", "test")
@@ -385,7 +385,7 @@ func TestMain_NewEncodeRequest_AudioImage_Ok(t *testing.T) {
 		a2Key  = "b.m4a"
 	)
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   "",
 		AudiosKeys: []string{a1Key, a2Key},
 		ImageKey:   imgKey,
@@ -431,7 +431,7 @@ func TestMain_NewEncodeRequest_AudioImage_Ok(t *testing.T) {
 
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
-		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.RecordId), "create")).
+		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.JobId), "create")).
 		Return(&client.BindingEvent{}, nil)
 
 	dir, err := os.MkdirTemp("", "test")
@@ -453,7 +453,7 @@ func TestMain_NewEncodeRequest_AudioOnly_Ok(t *testing.T) {
 		a2Key = "b.m4a"
 	)
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   "",
 		AudiosKeys: []string{a1Key, a2Key},
 		ImageKey:   "",
@@ -489,7 +489,7 @@ func TestMain_NewEncodeRequest_AudioOnly_Ok(t *testing.T) {
 
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
-		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.RecordId), "create")).
+		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.JobId), "create")).
 		Return(&client.BindingEvent{}, nil)
 
 	dir, err := os.MkdirTemp("", "test")
@@ -512,7 +512,7 @@ func TestMain_NewEncodeRequest_Ok_WithCleanup(t *testing.T) {
 		a2Key  = "b.m4a"
 	)
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   vidKey,
 		AudiosKeys: []string{a1Key, a2Key},
 		ImageKey:   "",
@@ -558,7 +558,7 @@ func TestMain_NewEncodeRequest_Ok_WithCleanup(t *testing.T) {
 
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
-		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.RecordId), "create")).
+		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.JobId), "create")).
 		Return(&client.BindingEvent{}, nil)
 
 	// And except any number of deletion request
@@ -587,7 +587,7 @@ func TestMain_NewEncodeRequest_EncodingError(t *testing.T) {
 		a2Key  = "b.m4a"
 	)
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   vidKey,
 		AudiosKeys: []string{a1Key, a2Key},
 		ImageKey:   "",
@@ -638,7 +638,7 @@ func TestMain_NewEncodeRequest_UploadError(t *testing.T) {
 		a2Key  = "b.m4a"
 	)
 	eReq := encode_box.EncodingRequest{
-		RecordId:   "1",
+		JobId:      "1",
 		VideoKey:   vidKey,
 		AudiosKeys: []string{a1Key, a2Key},
 		ImageKey:   "",
@@ -684,7 +684,7 @@ func TestMain_NewEncodeRequest_UploadError(t *testing.T) {
 
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
-		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.RecordId), "create")).
+		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.JobId), "create")).
 		Return(&client.BindingEvent{}, fmt.Errorf("test"))
 	dir, err := os.MkdirTemp("", "test")
 	if err != nil {
