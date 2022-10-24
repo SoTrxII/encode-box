@@ -340,7 +340,7 @@ func main() {
 	}
 	http.HandleFunc("/encode", func(w http.ResponseWriter, req *http.Request) {
 		encodeSync(w, req, components[client.Client]{
-			eBox:     encode_box.NewEncodeBox(&ctx, objStore),
+			eBox:     encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 10}),
 			objStore: objStore,
 		})
 	})

@@ -26,7 +26,7 @@ func Setup(t *testing.T) (string, *mock_object_storage.MockBindingProxy, *Encode
 	ctrl := gomock.NewController(t)
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 	objectStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
-	eBox := NewEncodeBox[*mock_object_storage.MockBindingProxy](&ctx, objectStore)
+	eBox := NewEncodeBox[*mock_object_storage.MockBindingProxy](&ctx, objectStore, &EncodeBoxOptions{ObjStoreMaxRetry: 0})
 	return dir, proxy, eBox
 }
 
@@ -50,6 +50,25 @@ func TestEncodeBox_DownloadAssetsErr(t *testing.T) {
 	aCol := getAssetsCollection(1, 1, 0)
 	err := eBox.downloadAssets(aCol)
 	assert.NotNil(t, err)
+}
+
+func TestEncodeBox_DownloadAssetsErrRetry(t *testing.T) {
+	dir, proxy, eBox := Setup(t)
+	eBox.opt.ObjStoreMaxRetry = 3
+	defer Teardown(t, dir)
+	aCol := getAssetsCollection(1, 1, 0)
+	// Using the same naming convention as the asset collection
+	vidName := "V_0"
+	audName := "A_0"
+	// Video will only succeed at the third attempt
+	proxy.EXPECT().InvokeBinding(gomock.Any(), NewBidingMatcher(vidName, "get")).Return(nil, fmt.Errorf("test"))
+	proxy.EXPECT().InvokeBinding(gomock.Any(), NewBidingMatcher(vidName, "get")).Return(nil, fmt.Errorf("test"))
+	proxy.EXPECT().InvokeBinding(gomock.Any(), NewBidingMatcher(vidName, "get")).Return(&client.BindingEvent{Data: []byte("a")}, nil)
+	// Audio will succeed at the second attempt
+	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test"))
+	proxy.EXPECT().InvokeBinding(gomock.Any(), NewBidingMatcher(audName, "get")).Return(&client.BindingEvent{Data: []byte("a")}, nil)
+	err := eBox.downloadAssets(aCol)
+	assert.Nil(t, err)
 }
 
 func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
@@ -175,4 +194,31 @@ func getAssetsCollection(vidCount int, audCount int, imgCount int) *AssetCollect
 		})
 	}
 	return &aCol
+}
+
+type bindingMatcher struct {
+	name      string
+	operation string
+}
+
+func NewBidingMatcher(name, operation string) gomock.Matcher {
+	return &bindingMatcher{name, operation}
+}
+
+func (m *bindingMatcher) Matches(x interface{}) bool {
+	req, ok := x.(*client.InvokeBindingRequest)
+	if !ok {
+		return false
+	}
+	if req.Operation != m.operation {
+		return false
+	}
+	// If the name is a wildcard, accept anything
+	if m.name != "*" && req.Metadata["key"] != m.name {
+		return false
+	}
+	return true
+}
+func (m *bindingMatcher) String() string {
+	return m.name
 }

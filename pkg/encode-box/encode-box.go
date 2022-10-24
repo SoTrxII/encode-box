@@ -7,13 +7,20 @@ import (
 	"encode-box/pkg/logger"
 	object_storage "encode-box/pkg/object-storage"
 	"fmt"
+	"math"
 	"os"
+	"time"
 )
 
 var (
 	log = logger.Build()
 )
 
+type EncodeBoxOptions struct {
+	// Number of time to retry calls made to the object store.
+	// Each call will be followed by a wait time of (2^attempt)s
+	ObjStoreMaxRetry int8
+}
 type EncodeBox[T object_storage.BindingProxy] struct {
 	// Assets Downloader
 	Downloader *object_storage.ObjectStorage[T]
@@ -25,9 +32,11 @@ type EncodeBox[T object_storage.BindingProxy] struct {
 	EChan chan error
 	// Progress channel
 	PChan chan console_parser.EncodingProgress
+	// Behaviour options
+	opt EncodeBoxOptions
 }
 
-func NewEncodeBox[T object_storage.BindingProxy](ctx *context.Context, downloader *object_storage.ObjectStorage[T]) *EncodeBox[T] {
+func NewEncodeBox[T object_storage.BindingProxy](ctx *context.Context, downloader *object_storage.ObjectStorage[T], opt *EncodeBoxOptions) *EncodeBox[T] {
 	eCtx, cancel := context.WithCancel(*ctx)
 
 	return &EncodeBox[T]{
@@ -36,6 +45,7 @@ func NewEncodeBox[T object_storage.BindingProxy](ctx *context.Context, downloade
 		Cancel:     cancel,
 		EChan:      make(chan error),
 		PChan:      make(chan console_parser.EncodingProgress),
+		opt:        *opt,
 	}
 }
 
@@ -86,7 +96,20 @@ func (eb *EncodeBox[T]) downloadAssets(assets *AssetCollection) error {
 	for _, asset := range *assets {
 		log.Debugf(`Downloading asset "%s"`, asset.key)
 		go func(asset *Asset) {
-			pathPtr, err := eb.Downloader.Download(asset.key)
+			var pathPtr *string
+			var err error
+			for attempts := int8(0); attempts <= eb.opt.ObjStoreMaxRetry; attempts++ {
+				pathPtr, err = eb.Downloader.Download(asset.key)
+				if err == nil {
+					break
+				}
+				log.Warnf("error in attempt %d at dowloading the video from the object storage %s", attempts, err.Error())
+				// We will use a linear backoff strategy, we don't have any collision whatsoever, we just want to wait until the video is available
+				// The sum 2^n from 0 to 10 = 2047 ~= 30min  of total wait, this is way more than enough, as more will be over an
+				// http session time. Plus, if the waiting time is really because of the b64 decoding, it's a 0(n) time complexity algorithm
+				delaySecs := int64(math.Pow(2, float64(attempts)))
+				time.Sleep(time.Duration(delaySecs) * time.Second)
+			}
 			if err != nil {
 				errorChannel <- err
 				return

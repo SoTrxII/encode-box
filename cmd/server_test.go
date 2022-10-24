@@ -164,7 +164,7 @@ func TestMain_Encode(t *testing.T) {
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	objectStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
-	eBox := encode_box.NewEncodeBox[*mock_object_storage.MockBindingProxy](&ctx, objectStore)
+	eBox := encode_box.NewEncodeBox[*mock_object_storage.MockBindingProxy](&ctx, objectStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
 	eReq := encode_box.EncodingRequest{
 		VideoKey:   "",
 		AudiosKeys: []string{"a", "b"},
@@ -370,7 +370,7 @@ func TestMain_NewEncodeRequest_AudioVideo_Ok(t *testing.T) {
 		t.Fatal(err)
 	}
 	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
-	eBox := encode_box.NewEncodeBox(&ctx, objStore)
+	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
 	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
 		eBox:     eBox,
 		objStore: objStore,
@@ -439,7 +439,7 @@ func TestMain_NewEncodeRequest_AudioImage_Ok(t *testing.T) {
 		t.Fatal(err)
 	}
 	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
-	eBox := encode_box.NewEncodeBox(&ctx, objStore)
+	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
 	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
 		eBox:     eBox,
 		objStore: objStore,
@@ -497,7 +497,7 @@ func TestMain_NewEncodeRequest_AudioOnly_Ok(t *testing.T) {
 		t.Fatal(err)
 	}
 	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
-	eBox := encode_box.NewEncodeBox(&ctx, objStore)
+	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
 	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
 		eBox:     eBox,
 		objStore: objStore,
@@ -572,7 +572,7 @@ func TestMain_NewEncodeRequest_Ok_WithCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
-	eBox := encode_box.NewEncodeBox(&ctx, objStore)
+	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
 	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
 		eBox:     eBox,
 		objStore: objStore,
@@ -622,7 +622,7 @@ func TestMain_NewEncodeRequest_EncodingError(t *testing.T) {
 		t.Fatal(err)
 	}
 	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
-	eBox := encode_box.NewEncodeBox(&ctx, objStore)
+	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
 	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
 		eBox:     eBox,
 		objStore: objStore,
@@ -691,7 +691,7 @@ func TestMain_NewEncodeRequest_UploadError(t *testing.T) {
 		t.Fatal(err)
 	}
 	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
-	eBox := encode_box.NewEncodeBox(&ctx, objStore)
+	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
 	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
 		eBox:     eBox,
 		objStore: objStore,
