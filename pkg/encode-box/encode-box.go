@@ -77,7 +77,8 @@ func (eb *EncodeBox[T]) Encode(req *EncodingRequest, output string) {
 	for {
 		select {
 		case p := <-enc.PChan:
-			fmt.Printf("%+v\n", p)
+			log.Debugf("%+v\n", p)
+			eb.PChan <- *p
 		case e := <-enc.EChan:
 			eb.EChan <- fmt.Errorf("error while encoding : %w", e)
 		case <-enc.Ctx.Done():
