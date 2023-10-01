@@ -2,7 +2,7 @@
 
 
 dapr:
-	dapr run --log-level debug --app-id encode-box --dapr-http-max-request-size="1000" --dapr-http-port=3500 --dapr-grpc-port=50001 --components-path=dapr/components
+	dapr run --log-level debug --app-id encode-box --dapr-http-max-request-size="1000" --dapr-grpc-port=50010 --components-path=dapr/components
 
 build:
 	go build cmd/server.go
