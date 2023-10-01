@@ -1,6 +1,3 @@
-//go:build integration
-// +build integration
-
 package encode_box
 
 import (
@@ -24,11 +21,12 @@ const (
 
 func SetupInt(t *testing.T) (string, *EncodeBox[client.Client]) {
 	ctx := context.Background()
-	downloader, err := object_storage.NewDaprObjectStorage(&ctx, ObjStoreComponent)
+
+	daprClient, err := client.NewClientWithPort("50010")
 	if err != nil {
 		t.Fatal(err)
 	}
-	daprClient, err := client.NewClient()
+	downloader, err := object_storage.NewDaprObjectStorage(&ctx, &daprClient, ObjStoreComponent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +51,7 @@ func SetupInt(t *testing.T) (string, *EncodeBox[client.Client]) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eBox := NewEncodeBox[client.Client](&ctx, downloader)
+	eBox := NewEncodeBox[client.Client](&ctx, downloader, &EncodeBoxOptions{})
 	return dir, eBox
 }
 

@@ -165,14 +165,14 @@ func (eb *EncodeBox[T]) setupEnc(req *EncodingRequest, assets *AssetCollection, 
 		return nil, fmt.Errorf("no suitable encoder found for %+v", req)
 
 	}
-	// The encoder can be either an Audio/Video encoder
+	// The encoder can be either an MainAudio/Video encoder
 	if req.VideoKey != "" && req.ImageKey == "" {
 		enc, err = encoder.GetAudiosVideoEnc(&eb.Ctx, assets.VideosPaths()[0], assets.AudiosPaths(), output)
 	} else if req.ImageKey != "" && req.VideoKey == "" {
 		// Or an image/video encoder
 		enc, err = encoder.GetAudiosImageEnc(&eb.Ctx, assets.ImagesPaths()[0], assets.AudiosPaths(), output)
 	} else if req.ImageKey == "" && req.VideoKey == "" {
-		enc, err = encoder.GetAudiosOnlyEnc(&eb.Ctx, assets.AudiosPaths(), output)
+		enc, err = encoder.GetAudiosOnlyEnc(&eb.Ctx, assets.AudiosPaths(), assets.SideAudiosPaths()[0], output)
 	} else {
 		// If an unsupported assets set is passed, don't event try and error out
 		return nil, fmt.Errorf("no suitable encoder found for %+v", req)
@@ -189,8 +189,10 @@ type EncodingRequest struct {
 	JobId string `json:"jobId"`
 	// Storage backend keys for all videos tracks
 	VideoKey string `json:"videoKey"`
-	// Storage backend keys for all audio tracks
+	// Storage backend keys for all main audio track part
 	AudiosKeys []string `json:"audiosKeys"`
+	// Storage backend keys for all side audio track part
+	BackgroundAudioKey string `json:"backgroundAudioKey" omitempty:"true"`
 	// Storage backend keys for the image track
 	ImageKey string `json:"imageKey"`
 	// All available options for encoding
