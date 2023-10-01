@@ -112,7 +112,7 @@ func GetAudiosImageEnc(ctx *context.Context, imagePath string, audioPaths []stri
 // GetAudiosOnlyEnc Return an initialized encoder with a black background and multiple audio tracks
 // If multiple audios are specified, they will be concatenated
 // The resulting video will have a black background over the video audio track
-func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, output string) (*Encoder, error) {
+func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, sideAudioPath string, output string) (*Encoder, error) {
 	builder := Builder{}
 	// video track
 	builder.AddInput(&FileInput{Path: "color=black:s=1280x720:r=25", Format: "lavfi"})
@@ -137,6 +137,17 @@ func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, output string) 
 	}
 	// In any way, normalize...
 	graphRoot = filtergraph.NewAudioNormalizationFilter(graphRoot)
+
+	// If a side audio track is specified, add it to the mix
+	if sideAudioPath != "" {
+		var sideTrack filtergraph.Filter
+		builder.AddInput(&FileInput{Path: sideAudioPath})
+		sideTrack = filtergraph.NewInput(fmt.Sprintf("%d", len(audioPaths)+1))
+		// Normalize it...
+		sideTrack = filtergraph.NewAudioNormalizationFilter(sideTrack)
+		// ... and mix it with the main audio track
+		graphRoot = filtergraph.NewAudioMixFilter(graphRoot, sideTrack, [2]float32{0.2, 1})
+	}
 
 	// ... and resample the resulting audio
 	graphRoot = filtergraph.NewAudioResampleFilter(graphRoot, filtergraph.K44)

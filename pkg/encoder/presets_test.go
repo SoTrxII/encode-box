@@ -77,7 +77,7 @@ func TestEncodeBox_getAudiosOnly_SingleAudio(t *testing.T) {
 	dir, out := Setup(t)
 	defer Teardown(t, dir)
 	ctx := context.Background()
-	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1}, out)
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1}, "", out)
 	err = runEncoding(t, enc)
 	assert.Nil(t, err)
 }
@@ -87,7 +87,26 @@ func TestEncodeBox_getAudiosOnly_MultipleAudios(t *testing.T) {
 	dir, out := Setup(t)
 	defer Teardown(t, dir)
 	ctx := context.Background()
-	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1, TestAudio2, TestAudio3}, out)
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1, TestAudio2, TestAudio3}, "", out)
+	err = runEncoding(t, enc)
+	assert.Nil(t, err)
+}
+
+func TestEncodeBox_getAudiosOnly_SingleAudio_SideChannel(t *testing.T) {
+	dir, out := Setup(t)
+	defer Teardown(t, dir)
+	ctx := context.Background()
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1}, TestAudio2, out)
+	err = runEncoding(t, enc)
+	assert.Nil(t, err)
+}
+
+// Testing an encoding with a placeholder used as a video track and multiples audio tracks
+func TestEncodeBox_getAudiosOnly_MultipleAudios_SideChannel(t *testing.T) {
+	dir, out := Setup(t)
+	defer Teardown(t, dir)
+	ctx := context.Background()
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1, TestAudio2, TestAudio3}, TestAudio2, out)
 	err = runEncoding(t, enc)
 	assert.Nil(t, err)
 }

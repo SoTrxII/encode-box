@@ -15,6 +15,7 @@ const (
 	Video = iota
 	Audio
 	Image
+	SideAudio
 )
 
 // AssetCollection an enhanced array of pointer to assets
@@ -39,6 +40,13 @@ func NewAssetCollectionFrom(req *EncodingRequest) *AssetCollection {
 				media: Audio,
 			})
 		}
+	}
+
+	if req.BackgroundAudioKey != "" {
+		allAssets = append(allAssets, &Asset{
+			key:   req.BackgroundAudioKey,
+			media: SideAudio,
+		})
 	}
 
 	// And finally the image track
@@ -70,6 +78,12 @@ func (ac *AssetCollection) AudiosPaths() []string {
 func (ac *AssetCollection) ImagesPaths() []string {
 	return ac.findPaths(func(asset *Asset) bool {
 		return asset.media == Image
+	})
+}
+
+func (ac *AssetCollection) SideAudiosPaths() []string {
+	return ac.findPaths(func(asset *Asset) bool {
+		return asset.media == SideAudio
 	})
 }
 
