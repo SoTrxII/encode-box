@@ -32,11 +32,25 @@ func TestAudioMixFilter(t *testing.T) {
 }
 
 // Testing normalization filter in isolation
-func TestNormalizationFilter(t *testing.T) {
+func TestNormalizationFilterLoudnorm(t *testing.T) {
 	a1 := NewInput("0")
-	norm := NewAudioNormalizationFilter(a1)
+	norm := NewAudioNormalizationFilter(a1, Loudnorm)
 	builtFilter := norm.Build()
 	assert.Equal(t, fmt.Sprintf("[0]loudnorm=I=-16:TP=-1.5:LRA=11[%s];", norm.Id()), builtFilter)
+}
+
+func TestNormalizationFilterDynaudnorm(t *testing.T) {
+	a1 := NewInput("0")
+	norm := NewAudioNormalizationFilter(a1, Dynaudnorm)
+	builtFilter := norm.Build()
+	assert.Equal(t, fmt.Sprintf("[0]dynaudnorm[%s];", norm.Id()), builtFilter)
+}
+
+func TestNormalizationFilterSpeechnorm(t *testing.T) {
+	a1 := NewInput("0")
+	norm := NewAudioNormalizationFilter(a1, Speechnorm)
+	builtFilter := norm.Build()
+	assert.Equal(t, fmt.Sprintf("[0]speechnorm[%s];", norm.Id()), builtFilter)
 }
 
 // Testing resample filter in isolation
