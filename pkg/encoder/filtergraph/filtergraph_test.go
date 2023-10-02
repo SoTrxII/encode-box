@@ -72,6 +72,13 @@ func TestResampleFilter(t *testing.T) {
 		builtFilter)
 }
 
+func TestVolumeFilter(t *testing.T) {
+	a1 := NewInput("0")
+	vol := NewAudioVolumeFilter(a1, 1.5)
+	builtFilter := vol.Build()
+	assert.Equal(t, fmt.Sprintf("[0]volume=1.50[%s];", vol.Id()), builtFilter)
+}
+
 // Testing concat and mix chained
 func TestCompositeAudioConcatAndMix(t *testing.T) {
 	a1 := NewInput("0")

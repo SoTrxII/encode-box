@@ -14,11 +14,13 @@ const (
 )
 
 var (
-	TestVideo  = path.Join(ResPath, "/video.mp4")
-	TestImage  = path.Join(ResPath, "/test.jpg")
-	TestAudio1 = path.Join(ResPath, "/audio.m4a")
-	TestAudio2 = path.Join(ResPath, "/audio.m4a")
-	TestAudio3 = path.Join(ResPath, "/audio.m4a")
+	TestVideo      = path.Join(ResPath, "/video.mp4")
+	TestImage      = path.Join(ResPath, "/test.jpg")
+	TestAudio1     = path.Join(ResPath, "/audio.m4a")
+	TestAudio2     = path.Join(ResPath, "/audio.m4a")
+	TestAudio3     = path.Join(ResPath, "/audio.m4a")
+	TestBackground = path.Join(ResPath, "/background-music.mp3")
+	TestDialog     = path.Join(ResPath, "/dialog.mp3")
 )
 
 // Creates a temp directory for test to run into
@@ -96,7 +98,7 @@ func TestEncodeBox_getAudiosOnly_SingleAudio_SideChannel(t *testing.T) {
 	dir, out := Setup(t)
 	defer Teardown(t, dir)
 	ctx := context.Background()
-	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1}, TestAudio2, out)
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestDialog}, TestBackground, out)
 	err = runEncoding(t, enc)
 	assert.Nil(t, err)
 }

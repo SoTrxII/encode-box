@@ -35,13 +35,13 @@ func GetAudiosVideoEnc(ctx *context.Context, videoPath string, audioPaths []stri
 
 	}
 	// In any way, normalize...
-	graphRoot = filtergraph.NewAudioNormalizationFilter(graphRoot)
+	graphRoot = filtergraph.NewAudioNormalizationFilter(graphRoot, filtergraph.Speechnorm)
 
 	// ... and resample the resulting audio
 	graphRoot = filtergraph.NewAudioResampleFilter(graphRoot, filtergraph.K44)
 
 	// Finally, mix the video track with the combined audio track
-	graphRoot = filtergraph.NewAudioMixFilter(videoTrack, graphRoot, [2]float32{0.2, 1})
+	graphRoot = filtergraph.NewAudioMixFilter(videoTrack, graphRoot, filtergraph.WithoutModulation, [2]float32{1, 0.2})
 
 	// And assign the graph to the command
 	builder.SetFilterGraph(graphRoot)
@@ -82,7 +82,7 @@ func GetAudiosImageEnc(ctx *context.Context, imagePath string, audioPaths []stri
 
 	}
 	// In any way, normalize...
-	graphRoot = filtergraph.NewAudioNormalizationFilter(graphRoot)
+	graphRoot = filtergraph.NewAudioNormalizationFilter(graphRoot, filtergraph.Speechnorm)
 
 	// ... and resample the resulting audio
 	graphRoot = filtergraph.NewAudioResampleFilter(graphRoot, filtergraph.K44)
@@ -136,7 +136,7 @@ func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, sideAudioPath s
 
 	}
 	// In any way, normalize...
-	graphRoot = filtergraph.NewAudioNormalizationFilter(graphRoot)
+	graphRoot = filtergraph.NewAudioNormalizationFilter(graphRoot, filtergraph.Speechnorm)
 
 	// If a side audio track is specified, add it to the mix
 	if sideAudioPath != "" {
@@ -144,9 +144,9 @@ func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, sideAudioPath s
 		builder.AddInput(&FileInput{Path: sideAudioPath})
 		sideTrack = filtergraph.NewInput(fmt.Sprintf("%d", len(audioPaths)+1))
 		// Normalize it...
-		sideTrack = filtergraph.NewAudioNormalizationFilter(sideTrack)
+		sideTrack = filtergraph.NewAudioNormalizationFilter(sideTrack, filtergraph.Dynaudnorm)
 		// ... and mix it with the main audio track
-		graphRoot = filtergraph.NewAudioMixFilter(graphRoot, sideTrack, [2]float32{0.2, 1})
+		graphRoot = filtergraph.NewAudioMixFilter(graphRoot, sideTrack, filtergraph.WithoutModulation, [2]float32{1, 0.33})
 	}
 
 	// ... and resample the resulting audio
