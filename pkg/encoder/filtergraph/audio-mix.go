@@ -5,10 +5,11 @@ import (
 	"strings"
 )
 
-// AudioMixFilter mixing two audio tracks, with a modulated volume
+// AudioMix mixing two audio tracks, with a modulated volume
 // Documentation : https://ffmpeg.org/ffmpeg-filters.html#amix
-type AudioMixFilter struct {
+type AudioMix struct {
 	Node
+	mode AudioMixMode
 	// Relative volume of [main, side] channels
 	weights [2]float32
 	// Main channel index to find in both weights and children
@@ -17,19 +18,58 @@ type AudioMixFilter struct {
 	sideChannelIndex uint8
 }
 
-func NewAudioMixFilter(main Filter, side Filter, weights [2]float32) *AudioMixFilter {
-	return &AudioMixFilter{
+type AudioMixMode uint8
+
+const (
+	WithoutModulation AudioMixMode = iota
+	WithModulation
+)
+
+func NewAudioMixFilter(main Filter, side Filter, mode AudioMixMode, weights [2]float32) *AudioMix {
+	return &AudioMix{
 		Node: Node{
 			name:     fmt.Sprintf("mixed_%s", randString(5)),
 			children: []Filter{main, side},
 		},
+		mode:             mode,
 		weights:          weights,
 		mainChannelIndex: 0,
 		sideChannelIndex: 1,
 	}
 }
 
-func (amf *AudioMixFilter) Build() string {
+func (amf *AudioMix) Build() string {
+	switch amf.mode {
+	case WithModulation:
+		return amf.withModulation()
+	case WithoutModulation:
+		return amf.withoutModulation()
+	default:
+		return "invalid mix filter"
+	}
+
+}
+
+func (amf *AudioMix) withoutModulation() string {
+	// Expected format : [main][side]amix=weights=1 0.2[res]
+	ss := strings.Builder{}
+	for _, c := range amf.children {
+		ss.WriteString(c.Build())
+	}
+
+	ss.WriteString(
+		fmt.Sprintf("[%s][%s]amix=weights=%.1f %.1f[%s];",
+			amf.children[amf.mainChannelIndex].Id(),
+			amf.children[amf.sideChannelIndex].Id(),
+			amf.weights[amf.mainChannelIndex],
+			amf.weights[amf.sideChannelIndex],
+			amf.Id(),
+		),
+	)
+	return ss.String()
+}
+
+func (amf *AudioMix) withModulation() string {
 	// Expected format :
 	// nolint:lll  "[1]asplit=2[sc][v1];[r1][sc]sidechaincompress=threshold=0.05:ratio=5:level_sc=0.8[bg];[bg][v1]amix=weights=0.2 1[a3]"
 	ss := strings.Builder{}
@@ -71,8 +111,8 @@ func (amf *AudioMixFilter) Build() string {
 			amf.Id()))
 
 	return ss.String()
-
 }
-func (amf *AudioMixFilter) Id() string {
+
+func (amf *AudioMix) Id() string {
 	return amf.name
 }

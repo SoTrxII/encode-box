@@ -17,10 +17,10 @@ func TestAudioConcatFilter(t *testing.T) {
 }
 
 // Testing mix filter in isolation
-func TestAudioMixFilter(t *testing.T) {
+func TestAudioMixFilterWithModulation(t *testing.T) {
 	a1 := NewInput("0")
 	a2 := NewInput("1")
-	mix := NewAudioMixFilter(a1, a2, [2]float32{0.2, 1})
+	mix := NewAudioMixFilter(a1, a2, WithModulation, [2]float32{1, 0.2})
 	builtFilter := mix.Build()
 	// This is a 3 steps pipeline (with a ";" at the end)
 	assert.Equal(t, 4, len(strings.Split(builtFilter, ";")))
@@ -29,6 +29,15 @@ func TestAudioMixFilter(t *testing.T) {
 	// And both the main and side channel should only be used once
 	assert.Equal(t, 1, strings.Count(builtFilter, "[0]"))
 	assert.Equal(t, 1, strings.Count(builtFilter, "[1]"))
+}
+
+// Testing mix filter in isolation
+func TestAudioMixFilterWithoutModulation(t *testing.T) {
+	a1 := NewInput("0")
+	a2 := NewInput("1")
+	mix := NewAudioMixFilter(a1, a2, WithoutModulation, [2]float32{1, 0.2})
+	builtFilter := mix.Build()
+	assert.Equal(t, fmt.Sprintf("[0][1]amix=weights=1.0 0.2[%s];", mix.Id()), builtFilter)
 }
 
 // Testing normalization filter in isolation
@@ -72,7 +81,7 @@ func TestCompositeAudioConcatAndMix(t *testing.T) {
 	// Then, define a side channel
 	a3 := NewInput("2")
 	// And mix them together
-	mix := NewAudioMixFilter(concat, a3, [2]float32{0.2, 1})
+	mix := NewAudioMixFilter(concat, a3, WithoutModulation, [2]float32{0.2, 1})
 	builtFilter := mix.Build()
 	fmt.Println(builtFilter)
 	// Concat must be executed before Mix
