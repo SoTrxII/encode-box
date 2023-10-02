@@ -12,6 +12,7 @@ import (
 	"github.com/dapr/go-sdk/client"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -22,29 +23,29 @@ const (
 // These are integration test, using all real components
 // Dapr and the backend storage should be booted up for this to work
 
-func SetupInt(t *testing.T) (string, *encode_box.EncodeBox[client.Client]) {
+func SetupInt(t *testing.T) (string, *encode_box.EncodeBox) {
 	ctx := context.Background()
-	daprClient, err := client.NewClient()
+	daprClient, err := client.NewClientWithPort(strconv.Itoa(50010))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = copy(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio")
+	err = copyToStorage(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio")
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = copy(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio2")
+	err = copyToStorage(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio2")
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = copy(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio3")
+	err = copyToStorage(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio3")
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = copy(&daprClient, filepath.Join(ResDir, "video.mp4"), "video")
+	err = copyToStorage(&daprClient, filepath.Join(ResDir, "video.mp4"), "video")
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = copy(&daprClient, filepath.Join(ResDir, "test.jpg"), "image")
+	err = copyToStorage(&daprClient, filepath.Join(ResDir, "test.jpg"), "image")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,8 +54,8 @@ func SetupInt(t *testing.T) (string, *encode_box.EncodeBox[client.Client]) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objStore, err := object_storage.NewDaprObjectStorage(&ctx, &daprClient, ObjStoreComponent)
-	eBox := encode_box.NewEncodeBox(&ctx, objStore)
+	objStore := object_storage.NewObjectStorage(&ctx, daprClient, ObjStoreComponent, b64)
+	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 3})
 	return dir, eBox
 }
 
@@ -71,7 +72,7 @@ func TestMain_Encode_AudioVideo_Int(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err, _ = encode[client.Client](eBox, &req, filepath.Join(dir, "out.mp4"))
+	err, _ = encode(eBox, &req, filepath.Join(dir, "out.mp4"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +91,7 @@ func TestMain_Encode_AudioImage_Int(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err, _ = encode[client.Client](eBox, &req, filepath.Join(dir, "out.mp4"))
+	err, _ = encode(eBox, &req, filepath.Join(dir, "out.mp4"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,13 +110,13 @@ func TestMain_Encode_AudioOnly_Int(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err, _ = encode[client.Client](eBox, &req, filepath.Join(dir, "out.mp4"))
+	err, _ = encode(eBox, &req, filepath.Join(dir, "out.mp4"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Println(dir)
 }
-func copy(daprClient *client.Client, src string, keyName string) error {
+func copyToStorage(daprClient *client.Client, src string, keyName string) error {
 	rawContent, err := os.ReadFile(src)
 	if err != nil {
 		return err
@@ -127,7 +128,8 @@ func copy(daprClient *client.Client, src string, keyName string) error {
 		Operation: "create",
 		Data:      b64Content,
 		Metadata: map[string]string{
-			"key": keyName,
+			"key":      keyName,
+			"fileName": keyName,
 		},
 	})
 	if err != nil {

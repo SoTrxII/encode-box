@@ -28,9 +28,9 @@ var (
 	// Master context
 	ctx = context.Background()
 	// Event broker, can be nil
-	broker *progress_broker.ProgressBroker[client.Client]
+	broker *progress_broker.ProgressBroker
 	// Object store instance, use to retrieve/upload assets
-	objStore *object_storage.ObjectStorage[client.Client]
+	objStore *object_storage.ObjectStorage
 )
 
 const (
@@ -55,11 +55,11 @@ const (
 )
 
 // Some kind of a root DI container
-type components[T object_storage.BindingProxy] struct {
+type components struct {
 	// Encode box
-	eBox *encode_box.EncodeBox[T]
+	eBox *encode_box.EncodeBox
 	// Object backend storage
-	objStore *object_storage.ObjectStorage[T]
+	objStore *object_storage.ObjectStorage
 }
 
 // Fire a new encoding
@@ -68,7 +68,7 @@ type components[T object_storage.BindingProxy] struct {
 // only be deleted from the messaging service after we made sure the processing is complete
 // Although it's still possible to use it in plain HTTP, you'd have to set the HTTP_SESSION
 // max time to 0
-func encodeSync[T object_storage.BindingProxy](w http.ResponseWriter, req *http.Request, comp components[T]) {
+func encodeSync(w http.ResponseWriter, req *http.Request, comp components) {
 	// Confirm Dapr subscription
 	if req.Method == http.MethodOptions {
 		_, _ = w.Write([]byte("OK"))
@@ -78,7 +78,7 @@ func encodeSync[T object_storage.BindingProxy](w http.ResponseWriter, req *http.
 
 	// Check the format of the encode request...
 
-	// Do not consume the body, instead make a copy of it
+	// Do not consume the body, instead make a copyToStorage of it
 	contents, _ := io.ReadAll(req.Body)
 	bodyCopy := io.NopCloser(bytes.NewReader(contents))
 	defer bodyCopy.Close()
@@ -173,7 +173,7 @@ func parseBody(from io.ReadCloser) (*encode_box.EncodingRequest, error) {
 	return &eReq, nil
 }
 
-func cleanUpFromObjectStore[T object_storage.BindingProxy](eReq *encode_box.EncodingRequest, objStore *object_storage.ObjectStorage[T]) error {
+func cleanUpFromObjectStore(eReq *encode_box.EncodingRequest, objStore *object_storage.ObjectStorage) error {
 	var failures []string
 	// Video
 	if eReq.VideoKey != "" {
@@ -229,7 +229,7 @@ type encodeError struct {
 }
 
 // Fire a new encoding
-func encode[T object_storage.BindingProxy](eBox *encode_box.EncodeBox[T], req *encode_box.EncodingRequest, output string) (error, int) {
+func encode(eBox *encode_box.EncodeBox, req *encode_box.EncodingRequest, output string) (error, int) {
 	// Fire the encoding and wait for it to finish/error
 	go eBox.Encode(req, output)
 	for {
@@ -307,11 +307,7 @@ func loadComponents() error {
 	if err != nil {
 		return fmt.Errorf("cannot init dapr client : %w", err)
 	}
-	objStore, err = object_storage.NewDaprObjectStorage(&ctx, daprClient, objStoreComponent)
-	if err != nil {
-		return fmt.Errorf("cannot init object store : %w", err)
-	}
-
+	objStore = object_storage.NewObjectStorage(&ctx, *daprClient, objStoreComponent, true)
 	// Next, load the event broker. This is optional, the server can function without it defined
 	pubSubComponent := os.Getenv(PUBSUB_NAME)
 	pubSubTopic := os.Getenv(PUBSUB_TOPIC_PROGRESS)
@@ -320,7 +316,7 @@ func loadComponents() error {
 		if pubSubTopic == "" {
 			pubSubTopic = DefaultPubSubTopic
 		}
-		broker, err = progress_broker.NewProgressBroker[client.Client](&ctx, daprClient, progress_broker.NewBrokerOptions{
+		broker, err = progress_broker.NewProgressBroker(&ctx, *daprClient, progress_broker.NewBrokerOptions{
 			Component: pubSubComponent,
 			Topic:     pubSubTopic,
 		})
@@ -339,7 +335,7 @@ func main() {
 		os.Exit(-1)
 	}
 	http.HandleFunc("/encode", func(w http.ResponseWriter, req *http.Request) {
-		encodeSync(w, req, components[client.Client]{
+		encodeSync(w, req, components{
 			eBox:     encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 10}),
 			objStore: objStore,
 		})

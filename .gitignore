@@ -2,3 +2,5 @@
 coverage
 .env
 .dapr
+./resources/storage
+coverage.out

@@ -2,18 +2,17 @@ package progress_broker
 
 import (
 	"context"
+	"encode-box/internal/utils"
 	"encoding/json"
-	"github.com/dapr/go-sdk/client"
 )
 
-// ObjectStorage any S3-like storage solution
-type ProgressBroker[T PubSubProxy] struct {
+type ProgressBroker struct {
 	// Name of the Dapr Component to use
 	componentName string
 	// Name of the topic to publish into
 	topic string
 	// Client to publish event into
-	client *T
+	client utils.Publisher
 	// Current running context
 	ctx *context.Context
 }
@@ -31,18 +30,13 @@ type EncodeInfos struct {
 	State EncodeState `json:"state"`
 	Data  interface{} `json:"data"`
 }
-
-type PubSubProxy interface {
-	PublishEvent(ctx context.Context, pubsubName string, topicName string, data interface{}, opts ...client.PublishEventOption) error
-}
-
 type NewBrokerOptions struct {
 	Component string
 	Topic     string
 }
 
-func NewProgressBroker[T PubSubProxy](ctx *context.Context, client *T, opt NewBrokerOptions) (*ProgressBroker[T], error) {
-	return &ProgressBroker[T]{
+func NewProgressBroker(ctx *context.Context, client utils.Publisher, opt NewBrokerOptions) (*ProgressBroker, error) {
+	return &ProgressBroker{
 		componentName: opt.Component,
 		topic:         opt.Topic,
 		client:        client,
@@ -50,12 +44,12 @@ func NewProgressBroker[T PubSubProxy](ctx *context.Context, client *T, opt NewBr
 	}, nil
 }
 
-func (eb *ProgressBroker[T]) SendProgress(data EncodeInfos) error {
+func (eb *ProgressBroker) SendProgress(data EncodeInfos) error {
 	b, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
-	err = (*eb.client).PublishEvent(*eb.ctx, eb.componentName, eb.topic, string(b))
+	err = eb.client.PublishEvent(*eb.ctx, eb.componentName, eb.topic, string(b))
 	if err != nil {
 		return err
 	}

@@ -4,91 +4,106 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encode-box/internal/utils"
 	"encoding/base64"
 	"fmt"
-	"github.com/dapr/go-sdk/client"
 	"io"
 	"os"
-	"path/filepath"
 )
 
+type ObjectStore interface {
+	// Download a file from the backend storage
+	Download(key, path string) error
+	// Buffer the content of a file in memory
+	Buffer(key string) (data *io.Reader, err error)
+	// Upload Uploads a file on the backend storage
+	Upload(path string, key string) error
+	// Delete a file in the remote object storage
+	Delete(key string) error
+}
+
 // ObjectStorage any S3-like storage solution
-type ObjectStorage[T BindingProxy] struct {
-	// Destination path for all downloads
-	assetsPath string
+type ObjectStorage struct {
 	// Name of the Dapr component to use
 	componentName string
 	// Client to query the backend storage
-	client *T
+	client utils.Binder
 	// Current running context
 	ctx *context.Context
+	// Are file stored in base 64 ? True for most components
+	isBase64 bool
 }
 
-// NewDaprObjectStorage Prod ready constructor for an object-storage using Dapr
-func NewDaprObjectStorage(ctx *context.Context, daprClient *client.Client, component string) (*ObjectStorage[client.Client], error) {
-	dir, err := os.MkdirTemp("", "downloader-")
-	if err != nil {
-		return nil, err
-	}
-	return &ObjectStorage[client.Client]{
-		assetsPath:    dir,
+// NewObjectStorage Prod ready constructor for an object-storage using Dapr
+func NewObjectStorage(ctx *context.Context, client utils.Binder, component string, base64 bool) *ObjectStorage {
+	return &ObjectStorage{
 		componentName: component,
-		client:        daprClient,
+		client:        client,
 		ctx:           ctx,
-	}, nil
-}
-
-// NewObjectStorage General purpose object storage
-func NewObjectStorage[T BindingProxy](ctx *context.Context, assetsPath string, client T) *ObjectStorage[T] {
-	return &ObjectStorage[T]{
-		assetsPath:    assetsPath,
-		componentName: "",
-		client:        &client,
-		ctx:           ctx,
+		isBase64:      base64,
 	}
-}
-
-// Proxy to query the backend storage
-type BindingProxy interface {
-	// Invoke
-	InvokeBinding(ctx context.Context, in *client.InvokeBindingRequest) (out *client.BindingEvent, err error)
 }
 
 // Download a file from the backend storage
-func (od ObjectStorage[T]) Download(key string) (path *string, err error) {
-	res, err := (*od.client).InvokeBinding(*od.ctx, &client.InvokeBindingRequest{
+func (od *ObjectStorage) Download(key, path string) error {
+	reader, err := od.Buffer(key)
+	if err != nil {
+		return err
+	}
+	output, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+	_, err = io.Copy(output, *reader)
+	return err
+}
+
+// Buffer the content of a file in memory
+func (od *ObjectStorage) Buffer(key string) (data *io.Reader, err error) {
+	res, err := od.client.InvokeBinding(*od.ctx, &utils.InvokeBindingRequest{
 		Name:      od.componentName,
 		Operation: "get",
 		Data:      nil,
-		Metadata:  map[string]string{"key": key},
+		Metadata: map[string]string{ // The key used to change the name of the file isn't consistent across component. Weird
+			// https://docs.dapr.io/reference/components-reference/supported-bindings/s3/
+			"key": key,
+			// https://docs.dapr.io/reference/components-reference/supported-bindings/localstorage/
+			"fileName": key,
+		},
 	})
 	if err != nil {
 		return nil, err
 	}
-	writePath := filepath.Join(od.assetsPath, key)
+
+	// If it's not base64, just return the data
+	if !od.isBase64 {
+		var reader io.Reader = bytes.NewReader(res.Data)
+		return &reader, nil
+	}
+
+	// Else, decode the data
 	input := bytes.NewBuffer(res.Data)
 	decoder := base64.NewDecoder(base64.StdEncoding, input)
-	output, err := os.Create(writePath)
-	defer output.Close()
-	io.Copy(output, decoder)
-	if err != nil {
-		return nil, err
-	}
-	return &writePath, nil
+	return &decoder, nil
 }
 
 // Upload Uploads a file on the backend storage
-func (od ObjectStorage[T]) Upload(path string, key string) error {
+func (od *ObjectStorage) Upload(path string, key string) error {
 	b64bytes, err := readFileToB64(path)
 	if err != nil {
 		return err
 	}
-	_, err = (*od.client).InvokeBinding(*od.ctx, &client.InvokeBindingRequest{
+	_, err = od.client.InvokeBinding(*od.ctx, &utils.InvokeBindingRequest{
 		Name:      od.componentName,
 		Operation: "create",
 		Data:      b64bytes,
 		Metadata: map[string]string{
+			// The key used to change the name of the file isn't consistent across component. Weird
+			// https://docs.dapr.io/reference/components-reference/supported-bindings/s3/
 			"key": key,
+			// https://docs.dapr.io/reference/components-reference/supported-bindings/localstorage/
+			"fileName": key,
 		},
 	})
 	if err != nil {
@@ -98,13 +113,17 @@ func (od ObjectStorage[T]) Upload(path string, key string) error {
 }
 
 // Delete a file in the remote object storage
-func (od ObjectStorage[T]) Delete(key string) error {
-	_, err := (*od.client).InvokeBinding(*od.ctx, &client.InvokeBindingRequest{
+func (od *ObjectStorage) Delete(key string) error {
+	_, err := od.client.InvokeBinding(*od.ctx, &utils.InvokeBindingRequest{
 		Name:      od.componentName,
 		Operation: "delete",
 		Data:      nil,
 		Metadata: map[string]string{
+			// The key used to change the name of the file isn't consistent across component. Weird
+			// https://docs.dapr.io/reference/components-reference/supported-bindings/s3/
 			"key": key,
+			// https://docs.dapr.io/reference/components-reference/supported-bindings/localstorage/
+			"fileName": key,
 		},
 	})
 	return err

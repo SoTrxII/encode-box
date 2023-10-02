@@ -1,0 +1,14 @@
+quiet: False
+disable-version-string: True
+with-expecter: True
+dir: "test-utils"
+filename: "{{.MockName}}.go"
+outpkg: test_utils
+packages:
+  encode-box/internal/utils:
+    interfaces:
+      Publisher:
+      Binder:
+#  encode-box/pkg/object-storage:
+#    interfaces:
+#      ObjectStore:

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -21,9 +22,10 @@ type EncodeBoxOptions struct {
 	// Each call will be followed by a wait time of (2^attempt)s
 	ObjStoreMaxRetry int8
 }
-type EncodeBox[T object_storage.BindingProxy] struct {
+type EncodeBox struct {
 	// Assets Downloader
-	Downloader *object_storage.ObjectStorage[T]
+	Downloader *object_storage.ObjectStorage
+	Tmpdir     string
 	// Context
 	Ctx context.Context
 	// Cancel function
@@ -36,11 +38,15 @@ type EncodeBox[T object_storage.BindingProxy] struct {
 	opt EncodeBoxOptions
 }
 
-func NewEncodeBox[T object_storage.BindingProxy](ctx *context.Context, downloader *object_storage.ObjectStorage[T], opt *EncodeBoxOptions) *EncodeBox[T] {
+func NewEncodeBox(ctx *context.Context, downloader *object_storage.ObjectStorage, opt *EncodeBoxOptions) *EncodeBox {
 	eCtx, cancel := context.WithCancel(*ctx)
-
-	return &EncodeBox[T]{
+	tmpDir, err := os.MkdirTemp("", "encode-box")
+	if err != nil {
+		log.Fatalf("Could not create tmp dir for encode box : %s", err)
+	}
+	return &EncodeBox{
 		Downloader: downloader,
+		Tmpdir:     tmpDir,
 		Ctx:        eCtx,
 		Cancel:     cancel,
 		EChan:      make(chan error),
@@ -49,7 +55,7 @@ func NewEncodeBox[T object_storage.BindingProxy](ctx *context.Context, downloade
 	}
 }
 
-func (eb *EncodeBox[T]) Encode(req *EncodingRequest, output string) {
+func (eb *EncodeBox) Encode(req *EncodingRequest, output string) {
 	defer eb.Cancel()
 	log.Infof(`Now processing encoding request %+v`, req)
 
@@ -89,7 +95,7 @@ func (eb *EncodeBox[T]) Encode(req *EncodingRequest, output string) {
 
 // Concurrently download all assets required for the transcoding process
 // Modify in place the array pointer
-func (eb *EncodeBox[T]) downloadAssets(assets *AssetCollection) error {
+func (eb *EncodeBox) downloadAssets(assets *AssetCollection) error {
 	errorChannel := make(chan error)
 	successChannel := make(chan bool, len(*assets))
 
@@ -97,10 +103,10 @@ func (eb *EncodeBox[T]) downloadAssets(assets *AssetCollection) error {
 	for _, asset := range *assets {
 		log.Debugf(`Downloading asset "%s"`, asset.key)
 		go func(asset *Asset) {
-			var pathPtr *string
 			var err error
+			path := filepath.Join(eb.Tmpdir, asset.key)
 			for attempts := int8(0); attempts <= eb.opt.ObjStoreMaxRetry; attempts++ {
-				pathPtr, err = eb.Downloader.Download(asset.key)
+				err = eb.Downloader.Download(asset.key, path)
 				if err == nil {
 					break
 				}
@@ -115,7 +121,7 @@ func (eb *EncodeBox[T]) downloadAssets(assets *AssetCollection) error {
 				errorChannel <- err
 				return
 			}
-			asset.path = *pathPtr
+			asset.path = path
 			// Mark this goroutine as succeeded
 			successChannel <- true
 		}(asset)
@@ -141,7 +147,7 @@ Loop:
 }
 
 // Remove all assets form disk
-func (eb *EncodeBox[T]) cleanUpAssets(assets *AssetCollection) {
+func (eb *EncodeBox) cleanUpAssets(assets *AssetCollection) {
 	// Fire all downloads concurrently
 	for i, asset := range *assets {
 		log.Infof("[Encode box] :: Trying to delete asset %s", asset.path)
@@ -156,7 +162,7 @@ func (eb *EncodeBox[T]) cleanUpAssets(assets *AssetCollection) {
 }
 
 // Setup an Encoder instance with the downloaded assets
-func (eb *EncodeBox[T]) setupEnc(req *EncodingRequest, assets *AssetCollection, output string) (*encoder.Encoder, error) {
+func (eb *EncodeBox) setupEnc(req *EncodingRequest, assets *AssetCollection, output string) (*encoder.Encoder, error) {
 	var enc *encoder.Encoder
 	var err error
 
@@ -172,7 +178,11 @@ func (eb *EncodeBox[T]) setupEnc(req *EncodingRequest, assets *AssetCollection, 
 		// Or an image/video encoder
 		enc, err = encoder.GetAudiosImageEnc(&eb.Ctx, assets.ImagesPaths()[0], assets.AudiosPaths(), output)
 	} else if req.ImageKey == "" && req.VideoKey == "" {
-		enc, err = encoder.GetAudiosOnlyEnc(&eb.Ctx, assets.AudiosPaths(), assets.SideAudiosPaths()[0], output)
+		side := ""
+		if len(assets.SideAudiosPaths()) != 0 {
+			side = assets.SideAudiosPaths()[0]
+		}
+		enc, err = encoder.GetAudiosOnlyEnc(&eb.Ctx, assets.AudiosPaths(), side, output)
 	} else {
 		// If an unsupported assets set is passed, don't event try and error out
 		return nil, fmt.Errorf("no suitable encoder found for %+v", req)

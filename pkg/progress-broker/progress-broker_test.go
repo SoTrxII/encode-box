@@ -2,20 +2,19 @@ package progress_broker
 
 import (
 	"context"
-	mock_client "encode-box/internal/mock/dapr"
 	console_parser "encode-box/pkg/encoder/console-parser"
+	test_utils "encode-box/test-utils"
 	"fmt"
-	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/mock"
 	"testing"
 	"time"
 )
 
 func TestProgressBroker_SendProgress(t *testing.T) {
 	ctx := context.Background()
-	ctrl := gomock.NewController(t)
-	daprClient := mock_client.NewMockClient(ctrl)
-	daprClient.EXPECT().PublishEvent(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	pg, err := NewProgressBroker[*mock_client.MockClient](&ctx, &daprClient, NewBrokerOptions{
+	pub := test_utils.MockPublisher{}
+	pub.EXPECT().PublishEvent(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	pg, err := NewProgressBroker(&ctx, &pub, NewBrokerOptions{
 		Component: "",
 		Topic:     "",
 	})
@@ -42,10 +41,9 @@ func TestProgressBroker_SendProgress(t *testing.T) {
 
 func TestProgressBroker_SendError(t *testing.T) {
 	ctx := context.Background()
-	ctrl := gomock.NewController(t)
-	daprClient := mock_client.NewMockClient(ctrl)
-	daprClient.EXPECT().PublishEvent(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	pg, err := NewProgressBroker[*mock_client.MockClient](&ctx, &daprClient, NewBrokerOptions{
+	pub := test_utils.MockPublisher{}
+	pub.EXPECT().PublishEvent(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	pg, err := NewProgressBroker(&ctx, &pub, NewBrokerOptions{
 		Component: "",
 		Topic:     "",
 	})
@@ -64,10 +62,9 @@ func TestProgressBroker_SendError(t *testing.T) {
 
 func TestProgressBroker_SendDone(t *testing.T) {
 	ctx := context.Background()
-	ctrl := gomock.NewController(t)
-	daprClient := mock_client.NewMockClient(ctrl)
-	daprClient.EXPECT().PublishEvent(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	pg, err := NewProgressBroker[*mock_client.MockClient](&ctx, &daprClient, NewBrokerOptions{
+	pub := test_utils.MockPublisher{}
+	pub.EXPECT().PublishEvent(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	pg, err := NewProgressBroker(&ctx, &pub, NewBrokerOptions{
 		Component: "",
 		Topic:     "",
 	})
@@ -86,10 +83,9 @@ func TestProgressBroker_SendDone(t *testing.T) {
 
 func TestProgressBroker_CouldNotSend(t *testing.T) {
 	ctx := context.Background()
-	ctrl := gomock.NewController(t)
-	daprClient := mock_client.NewMockClient(ctrl)
-	daprClient.EXPECT().PublishEvent(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("test"))
-	pg, err := NewProgressBroker[*mock_client.MockClient](&ctx, &daprClient, NewBrokerOptions{
+	pub := test_utils.MockPublisher{}
+	pub.EXPECT().PublishEvent(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("test"))
+	pg, err := NewProgressBroker(&ctx, &pub, NewBrokerOptions{
 		Component: "",
 		Topic:     "",
 	})

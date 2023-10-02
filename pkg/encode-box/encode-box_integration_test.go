@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package encode_box
 
 import (
@@ -14,35 +17,36 @@ import (
 const (
 	ObjStoreComponent = "object-store"
 	ResDir            = "../../resources/test"
+	b64               = false
 )
 
 // These are integration test, using all real components
 // Dapr and the backend storage should be booted up for this to work
 
-func SetupInt(t *testing.T) (string, *EncodeBox[client.Client]) {
+func SetupInt(t *testing.T) (string, *EncodeBox) {
 	ctx := context.Background()
 
 	daprClient, err := client.NewClientWithPort("50010")
 	if err != nil {
 		t.Fatal(err)
 	}
-	downloader, err := object_storage.NewDaprObjectStorage(&ctx, &daprClient, ObjStoreComponent)
+	downloader := object_storage.NewObjectStorage(&ctx, daprClient, ObjStoreComponent, b64)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = copy(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio")
+	err = cpyToStorage(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio", b64)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = copy(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio2")
+	err = cpyToStorage(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio2", b64)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = copy(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio3")
+	err = cpyToStorage(&daprClient, filepath.Join(ResDir, "audio.m4a"), "audio3", b64)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = copy(&daprClient, filepath.Join(ResDir, "video.mp4"), "video")
+	err = cpyToStorage(&daprClient, filepath.Join(ResDir, "video.mp4"), "video", b64)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +55,7 @@ func SetupInt(t *testing.T) (string, *EncodeBox[client.Client]) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eBox := NewEncodeBox[client.Client](&ctx, downloader, &EncodeBoxOptions{})
+	eBox := NewEncodeBox(&ctx, downloader, &EncodeBoxOptions{})
 	return dir, eBox
 }
 
@@ -105,19 +109,27 @@ Loop:
 	fmt.Printf("Output dir : %s", dir)
 }
 
-func copy(daprClient *client.Client, src string, keyName string) error {
+func cpyToStorage(daprClient *client.Client, src string, keyName string, b64 bool) error {
+
 	rawContent, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
 	b64Content := make([]byte, base64.StdEncoding.EncodedLen(len(rawContent)))
 	base64.StdEncoding.Encode(b64Content, rawContent)
+
+	content := rawContent
+	if b64 {
+		content = b64Content
+	}
+
 	_, err = (*daprClient).InvokeBinding(context.Background(), &client.InvokeBindingRequest{
 		Name:      ObjStoreComponent,
 		Operation: "create",
-		Data:      b64Content,
+		Data:      content,
 		Metadata: map[string]string{
-			"key": keyName,
+			"key":      keyName,
+			"fileName": keyName,
 		},
 	})
 	if err != nil {

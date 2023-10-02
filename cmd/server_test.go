@@ -6,7 +6,7 @@ import (
 	mock_object_storage "encode-box/internal/mock/mock-object-storage"
 	encode_box "encode-box/pkg/encode-box"
 	object_storage "encode-box/pkg/object-storage"
-	"encoding/base64"
+	test_utils "encode-box/test-utils"
 	"encoding/json"
 	"fmt"
 	"github.com/dapr/go-sdk/client"
@@ -15,12 +15,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
 const (
 	ResDir = "../resources/test"
+	b64    = false
 )
 
 func TestMain_MakeEncodingRequest_NilBody(t *testing.T) {
@@ -163,15 +163,15 @@ func TestMain_Encode(t *testing.T) {
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
-	objectStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
-	eBox := encode_box.NewEncodeBox[*mock_object_storage.MockBindingProxy](&ctx, objectStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
+	objectStore := object_storage.NewObjectStorage(&ctx, proxy, "", b64)
+	eBox := encode_box.NewEncodeBox(&ctx, objectStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
 	eReq := encode_box.EncodingRequest{
 		VideoKey:   "",
 		AudiosKeys: []string{"a", "b"},
 		ImageKey:   "a",
 		Options:    encode_box.EncodingOptions{},
 	}
-	err, _ = encode[*mock_object_storage.MockBindingProxy](eBox, &eReq, dir)
+	err, _ = encode(eBox, &eReq, dir)
 
 	// Data are invalid, it will fail..
 	assert.NotNil(t, err)
@@ -181,45 +181,37 @@ func TestMain_Encode(t *testing.T) {
 
 func TestMain_cleanUpFromObjectStoreOk(t *testing.T) {
 	ctx := context.Background()
-	dir, err := os.MkdirTemp("", "assets")
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctrl := gomock.NewController(t)
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
-	objectStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	objectStore := object_storage.NewObjectStorage(&ctx, proxy, "", b64)
 	eReq := encode_box.EncodingRequest{
 		VideoKey:   "",
 		AudiosKeys: []string{"a", "b"},
 		ImageKey:   "a",
 		Options:    encode_box.EncodingOptions{},
 	}
-	err = cleanUpFromObjectStore[*mock_object_storage.MockBindingProxy](&eReq, objectStore)
+	err := cleanUpFromObjectStore(&eReq, objectStore)
 	assert.Nil(t, err)
 }
 
 func TestMain_cleanUpFromObjectStoreError(t *testing.T) {
 	ctx := context.Background()
-	dir, err := os.MkdirTemp("", "assets")
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctrl := gomock.NewController(t)
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test"))
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test"))
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test"))
-	objectStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	objectStore := object_storage.NewObjectStorage(&ctx, proxy, "", b64)
 	eReq := encode_box.EncodingRequest{
 		VideoKey:   "",
 		AudiosKeys: []string{"a", "b"},
 		ImageKey:   "a",
 		Options:    encode_box.EncodingOptions{},
 	}
-	err = cleanUpFromObjectStore[*mock_object_storage.MockBindingProxy](&eReq, objectStore)
+	err := cleanUpFromObjectStore(&eReq, objectStore)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "a, b, a")
 }
@@ -234,7 +226,7 @@ func TestMain_Healthz(t *testing.T) {
 func TestMain_NewEncodeRequest_Options(t *testing.T) {
 	req := httptest.NewRequest(http.MethodOptions, "/", nil)
 	w := httptest.NewRecorder()
-	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{})
+	encodeSync(w, req, components{})
 	assert.Equal(t, []byte("OK"), w.Body.Bytes())
 }
 
@@ -243,7 +235,7 @@ func TestMain_NewEncodeRequest_WrongRequest(t *testing.T) {
 	_, _ = body.Write([]byte("eReqContent"))
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
 	w := httptest.NewRecorder()
-	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{})
+	encodeSync(w, req, components{})
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
@@ -332,46 +324,30 @@ func TestMain_NewEncodeRequest_AudioVideo_Ok(t *testing.T) {
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 
 	// VidKey -> Sample video
-	videoContent, err := os.ReadFile(filepath.Join(ResDir, "video.mp4"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.
 		EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher(vidKey, "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(videoContent))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Video, b64)}, nil)
 
 	// a1Key -> Sample audio
-	audio1Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.
 		EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher("a.m4a", "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio1Content))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Audio, b64)}, nil)
 
 	// a2Key -> Sample audio
-	audio2Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher("b.m4a", "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio2Content))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Audio, b64)}, nil)
 
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.JobId), "create")).
 		Return(&client.BindingEvent{}, nil)
 
-	dir, err := os.MkdirTemp("", "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	objStore := object_storage.NewObjectStorage(&ctx, proxy, "", b64)
 	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
-	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
+	encodeSync(w, req, components{
 		eBox:     eBox,
 		objStore: objStore,
 	})
@@ -401,46 +377,30 @@ func TestMain_NewEncodeRequest_AudioImage_Ok(t *testing.T) {
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 
 	// ImgKey -> Sample image
-	imgContent, err := os.ReadFile(filepath.Join(ResDir, "test.jpg"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.
 		EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher(imgKey, "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(imgContent))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Image, b64)}, nil)
 
 	// a1Key -> Sample audio
-	audio1Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.
 		EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher("a.m4a", "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio1Content))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Audio, b64)}, nil)
 
 	// a2Key -> Sample audio
-	audio2Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher("b.m4a", "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio2Content))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Audio, b64)}, nil)
 
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.JobId), "create")).
 		Return(&client.BindingEvent{}, nil)
 
-	dir, err := os.MkdirTemp("", "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	objStore := object_storage.NewObjectStorage(&ctx, proxy, "", b64)
 	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
-	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
+	encodeSync(w, req, components{
 		eBox:     eBox,
 		objStore: objStore,
 	})
@@ -469,36 +429,23 @@ func TestMain_NewEncodeRequest_AudioOnly_Ok(t *testing.T) {
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 
 	// a1Key -> Sample audio
-	audio1Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.
 		EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher("a.m4a", "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio1Content))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Audio, b64)}, nil)
 
 	// a2Key -> Sample audio
-	audio2Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher("b.m4a", "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio2Content))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Audio, b64)}, nil)
 
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.JobId), "create")).
 		Return(&client.BindingEvent{}, nil)
-
-	dir, err := os.MkdirTemp("", "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	objStore := object_storage.NewObjectStorage(&ctx, proxy, "", b64)
 	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
-	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
+	encodeSync(w, req, components{
 		eBox:     eBox,
 		objStore: objStore,
 	})
@@ -528,33 +475,21 @@ func TestMain_NewEncodeRequest_Ok_WithCleanup(t *testing.T) {
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 
 	// VidKey -> Sample video
-	videoContent, err := os.ReadFile(filepath.Join(ResDir, "video.mp4"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.
 		EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher(vidKey, "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(videoContent))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Video, b64)}, nil)
 
 	// a1Key -> Sample audio
-	audio1Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.
 		EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher("a.m4a", "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio1Content))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Audio, b64)}, nil)
 
 	// a2Key -> Sample audio
-	audio2Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher("b.m4a", "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio2Content))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Audio, b64)}, nil)
 
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
@@ -566,14 +501,9 @@ func TestMain_NewEncodeRequest_Ok_WithCleanup(t *testing.T) {
 		InvokeBinding(gomock.Any(), NewBidingMatcher("*", "delete")).
 		Return(&client.BindingEvent{}, nil).
 		AnyTimes()
-
-	dir, err := os.MkdirTemp("", "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	objStore := object_storage.NewObjectStorage(&ctx, proxy, "", b64)
 	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
-	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
+	encodeSync(w, req, components{
 		eBox:     eBox,
 		objStore: objStore,
 	})
@@ -617,13 +547,9 @@ func TestMain_NewEncodeRequest_EncodingError(t *testing.T) {
 		InvokeBinding(gomock.Any(), NewBidingMatcher("b.m4a", "get")).
 		Return(&client.BindingEvent{Data: []byte("a")}, nil)
 
-	dir, err := os.MkdirTemp("", "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	objStore := object_storage.NewObjectStorage(&ctx, proxy, "", b64)
 	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
-	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
+	encodeSync(w, req, components{
 		eBox:     eBox,
 		objStore: objStore,
 	})
@@ -654,45 +580,29 @@ func TestMain_NewEncodeRequest_UploadError(t *testing.T) {
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
 
 	// VidKey -> Sample video
-	videoContent, err := os.ReadFile(filepath.Join(ResDir, "video.mp4"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.
 		EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher(vidKey, "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(videoContent))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Video, b64)}, nil)
 
 	// a1Key -> Sample audio
-	audio1Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.
 		EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher("a.m4a", "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio1Content))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Audio, b64)}, nil)
 
 	// a2Key -> Sample audio
-	audio2Content, err := os.ReadFile(filepath.Join(ResDir, "audio.m4a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher("b.m4a", "get")).
-		Return(&client.BindingEvent{Data: []byte(base64.StdEncoding.EncodeToString(audio2Content))}, nil)
+		Return(&client.BindingEvent{Data: test_utils.GetAssetContent(t, test_utils.Audio, b64)}, nil)
 
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.JobId), "create")).
 		Return(&client.BindingEvent{}, fmt.Errorf("test"))
-	dir, err := os.MkdirTemp("", "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	objStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
+	objStore := object_storage.NewObjectStorage(&ctx, proxy, "", b64)
 	eBox := encode_box.NewEncodeBox(&ctx, objStore, &encode_box.EncodeBoxOptions{ObjStoreMaxRetry: 0})
-	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{
+	encodeSync(w, req, components{
 		eBox:     eBox,
 		objStore: objStore,
 	})
@@ -717,7 +627,7 @@ func TestMain_NewEncodeRequest_NoDapr(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/", &body)
 	w := httptest.NewRecorder()
-	encodeSync(w, req, components[*mock_object_storage.MockBindingProxy]{})
+	encodeSync(w, req, components{})
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 

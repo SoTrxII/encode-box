@@ -1,137 +1,136 @@
 //go:build integration
 // +build integration
 
-// Integration testing for object-storage. Dapr must be booted up for this to run
+// Be sure to run "make dapr_test" before running this in your IDE
 package object_storage
 
 import (
 	"context"
-	"encoding/base64"
+	test_utils "encode-box/test-utils"
 	"fmt"
 	"github.com/dapr/go-sdk/client"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
-	"io/ioutil"
-	"path"
+	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 )
 
 const (
-	BucketPath    = "../../resources/bucket/"
-	DaprComponent = "object-store"
-	// Name of the file used for testing
-	TestFileName = "test.txt"
-	// Name of the asset used to test download
-	TestDownloadAssetKey = "testdl"
-	// Name of the asset used to test deletion
-	TestDeleteAssetKey = "testdelete"
+	// This is bound to local storage
+	DEFAULT_COMPONENT = "object-store"
+	// This is bound to minio
+	MINIO_COMPONENT = "object-store-minio"
+	// This is not the real default port, this is the one defined in the Makefile
+	DEFAULT_DAPR_PORT = 50010
+	STORAGE_PATH      = "../../resources/storage/"
 )
 
-type e2eTestSuite struct {
-	suite.Suite
-	client   client.Client
-	objStore *ObjectStorage[client.Client]
-}
-
-func (s *e2eTestSuite) SetupSuite() {
-	dir, err := ioutil.TempDir("", "prefix")
-	if err != nil {
-		s.Fail(err.Error())
+func setup(t *testing.T) *ObjectStorage {
+	err := os.MkdirAll(STORAGE_PATH, os.ModePerm)
+	assert.NoError(t, err)
+	daprPort := DEFAULT_DAPR_PORT
+	if envPort, err := strconv.ParseInt(os.Getenv("DAPR_GRPC_PORT"), 10, 32); err == nil && envPort != 0 {
+		daprPort = int(envPort)
 	}
-	// Check if the sidecar is up
-	daprClient, err := client.NewClient()
-	if err != nil {
-		fmt.Println("DAPR IS NOT RUNNING")
-		s.Fail(err.Error())
-	}
-	s.client = daprClient
+	daprClient, err := client.NewClientWithPort(strconv.Itoa(daprPort))
+	assert.NoError(t, err)
 	ctx := context.Background()
-	// Copy a file in the bucket directory to download it later
-	err = copy(&s.client, path.Join(ResPath, TestFileName), TestDownloadAssetKey)
-	err = copy(&s.client, path.Join(ResPath, TestFileName), TestDeleteAssetKey)
-	if err != nil {
-		s.Fail(err.Error())
-	}
-	s.objStore = &ObjectStorage[client.Client]{
-		assetsPath:    dir,
-		componentName: DaprComponent,
-		client:        &daprClient,
-		ctx:           &ctx,
-	}
-
+	// The base64 property must be set to true if using minio !
+	return NewObjectStorage(&ctx, daprClient, DEFAULT_COMPONENT, false)
 }
 
-func (s *e2eTestSuite) TestDownload_Int() {
-	expectedPath, err := s.objStore.Download(TestDownloadAssetKey)
-	if err != nil {
-		s.T().Fatal(err)
-	}
-	actual, err := os.ReadFile(*expectedPath)
-	if err != nil {
-		s.T().Fatal(err)
-	}
-	expected, err := os.ReadFile(path.Join(ResPath, TestDownloadAssetKey))
-
-	assert.Equal(s.T(), string(expected), string(actual))
+func teardown(t *testing.T) {
+	err := os.RemoveAll(STORAGE_PATH)
+	assert.NoError(t, err)
+}
+func TestUpload(t *testing.T) {
+	objStore := setup(t)
+	defer teardown(t)
+	err := objStore.Upload(test_utils.GetResAbsolutePath(t, test_utils.Text), test_utils.Text)
+	assert.NoError(t, err)
 }
 
-func (s *e2eTestSuite) TestDownload_Int_NotExists() {
-	_, err := s.objStore.Download("notexists")
-	if err == nil {
-		s.T().Fatal(err)
-	}
-	fmt.Println(err)
-	assert.Contains(s.T(), err.Error(), "does not exist")
+func TestDownload(t *testing.T) {
+	objStore := setup(t)
+	defer teardown(t)
+	// Make a temp dir to receive files
+	dir, err := os.MkdirTemp("", "obj-store-test")
+	assert.NoError(t, err)
+	// Attempt to download a non-existing resource
+	destPath := filepath.Join(dir, test_utils.Text)
+	err = objStore.Download(test_utils.Text, destPath)
+	assert.Error(t, err)
+
+	// Attempt to download an existing resource
+	copyToStorage(test_utils.GetResAbsolutePath(t, test_utils.Text))
+	err = objStore.Download(test_utils.Text, destPath)
+	assert.NoError(t, err)
+	_, err = os.Stat(destPath)
+	assert.NoError(t, err)
 }
 
-func (s *e2eTestSuite) TestUpload_Int() {
-	file := "audio.m4a"
-	err := s.objStore.Upload(path.Join(ResPath, file), file)
-	if err != nil {
-		s.T().Fatal(err)
-	}
+func TestDelete(t *testing.T) {
+	objStore := setup(t)
+	defer teardown(t)
+	// Attempt to delete a non-existing resource
+	err := objStore.Delete(test_utils.Text)
+	assert.Error(t, err)
+
+	// Attempt to delete an existing resource
+	copyToStorage(test_utils.GetResAbsolutePath(t, test_utils.Text))
+	err = objStore.Delete(test_utils.Text)
+	assert.NoError(t, err)
+	_, err = os.Stat(filepath.Join(STORAGE_PATH, test_utils.Text))
+	assert.True(t, os.IsNotExist(err))
 }
 
-func (s *e2eTestSuite) TestDelete_Int() {
-	// Check that the file can be downloaded
-	_, err := s.objStore.Download(TestDeleteAssetKey)
-	if err != nil {
-		s.T().Fatal(err)
-	}
-	// Then delete it
-	err = s.objStore.Delete(TestDeleteAssetKey)
-	if err != nil {
-		s.T().Fatal(err)
-	}
-	// And check that it cannot be downloaded anymore
-	res, err := s.objStore.Download(TestDeleteAssetKey)
-	if err == nil {
-		s.T().Fatal(err)
-	}
-	_ = res
+func TestUploadAndDelete(t *testing.T) {
+	objStore := setup(t)
+	defer teardown(t)
+	err := objStore.Upload(test_utils.GetResAbsolutePath(t, test_utils.Text), test_utils.Text)
+	assert.NoError(t, err)
+	err = objStore.Delete(test_utils.Text)
+	assert.NoError(t, err)
+	_, err = os.Stat(filepath.Join(STORAGE_PATH, test_utils.Text))
+	assert.True(t, os.IsNotExist(err))
 }
 
-func TestE2ETestSuite(t *testing.T) {
-	suite.Run(t, &e2eTestSuite{})
+func TestUploadAndDownload(t *testing.T) {
+	objStore := setup(t)
+	defer teardown(t)
+	err := objStore.Upload(test_utils.GetResAbsolutePath(t, test_utils.Text), test_utils.Text)
+	assert.NoError(t, err)
+	// Make a temp dir to receive files
+	dir, err := os.MkdirTemp("", "obj-store-test")
+	assert.NoError(t, err)
+	// Attempt to download an existing resource
+	destPath := filepath.Join(dir, test_utils.Text)
+	err = objStore.Download(test_utils.Text, destPath)
+	assert.NoError(t, err)
+	_, err = os.Stat(destPath)
+	assert.NoError(t, err)
+
+	// Ensure both file contents are the same
+	srcSum, err := test_utils.GetChecksum(test_utils.GetResAbsolutePath(t, test_utils.Text))
+	assert.NoError(t, err)
+	dstSum, err := test_utils.GetChecksum(destPath)
+	assert.NoError(t, err)
+	assert.Equal(t, srcSum, dstSum)
 }
 
-func copy(daprClient *client.Client, src string, keyName string) error {
-	rawContent, err := os.ReadFile(src)
+// Manually copy a file to the object store
+func copyToStorage(src string) {
+	input, err := os.ReadFile(src)
 	if err != nil {
-		return err
+		fmt.Println(err)
+		return
 	}
-	b64Content := make([]byte, base64.StdEncoding.EncodedLen(len(rawContent)))
-	base64.StdEncoding.Encode(b64Content, rawContent)
-	_, err = (*daprClient).InvokeBinding(context.Background(), &client.InvokeBindingRequest{
-		Name:      DaprComponent,
-		Operation: "create",
-		Data:      b64Content,
-		Metadata: map[string]string{
-			"key": keyName,
-		},
-	})
+	fileName := filepath.Base(src)
+	err = os.WriteFile(filepath.Join(STORAGE_PATH, fileName), input, 0644)
 	if err != nil {
-		return err
+		fmt.Println("Error creating", STORAGE_PATH)
+		fmt.Println(err)
+		return
 	}
-	return nil
 }

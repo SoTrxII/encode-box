@@ -8,7 +8,6 @@ import (
 	"github.com/dapr/go-sdk/client"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -17,34 +16,28 @@ const (
 	ResPath = "../../resources"
 )
 
-func Setup(t *testing.T) (string, *mock_object_storage.MockBindingProxy, *EncodeBox[*mock_object_storage.MockBindingProxy]) {
+func Setup(t *testing.T) (*mock_object_storage.MockBindingProxy, *EncodeBox) {
 	ctx := context.Background()
-	dir, err := os.MkdirTemp("", "assets")
-	if err != nil {
-		t.Fatal(err)
-	}
 	ctrl := gomock.NewController(t)
 	proxy := mock_object_storage.NewMockBindingProxy(ctrl)
-	objectStore := object_storage.NewObjectStorage[*mock_object_storage.MockBindingProxy](&ctx, dir, proxy)
-	eBox := NewEncodeBox[*mock_object_storage.MockBindingProxy](&ctx, objectStore, &EncodeBoxOptions{ObjStoreMaxRetry: 0})
-	return dir, proxy, eBox
+	objectStore := object_storage.NewObjectStorage(&ctx, proxy, "", false)
+	eBox := NewEncodeBox(&ctx, objectStore, &EncodeBoxOptions{ObjStoreMaxRetry: 0})
+	return proxy, eBox
 }
 
 func TestEncodeBox_DownloadAssets(t *testing.T) {
-	dir, proxy, eBox := Setup(t)
-	defer Teardown(t, dir)
+	proxy, eBox := Setup(t)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	aCol := getAssetsCollection(1, 1, 0)
 	err := eBox.downloadAssets(aCol)
 	assert.Nil(t, err)
-	assert.Equal(t, filepath.Join(dir, (*aCol)[0].key), (*aCol)[0].path)
-	assert.Equal(t, filepath.Join(dir, (*aCol)[1].key), (*aCol)[1].path)
+	assert.Equal(t, filepath.Join(eBox.Tmpdir, (*aCol)[0].key), (*aCol)[0].path)
+	assert.Equal(t, filepath.Join(eBox.Tmpdir, (*aCol)[1].key), (*aCol)[1].path)
 }
 
 func TestEncodeBox_DownloadAssetsErr(t *testing.T) {
-	dir, proxy, eBox := Setup(t)
-	defer Teardown(t, dir)
+	proxy, eBox := Setup(t)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test"))
 	aCol := getAssetsCollection(1, 1, 0)
@@ -53,9 +46,8 @@ func TestEncodeBox_DownloadAssetsErr(t *testing.T) {
 }
 
 func TestEncodeBox_DownloadAssetsErrRetry(t *testing.T) {
-	dir, proxy, eBox := Setup(t)
+	proxy, eBox := Setup(t)
 	eBox.opt.ObjStoreMaxRetry = 3
-	defer Teardown(t, dir)
 	aCol := getAssetsCollection(1, 1, 0)
 	// Using the same naming convention as the asset collection
 	vidName := "V_0"
@@ -72,8 +64,7 @@ func TestEncodeBox_DownloadAssetsErrRetry(t *testing.T) {
 }
 
 func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
-	dir, _, eBox := Setup(t)
-	defer Teardown(t, dir)
+	_, eBox := Setup(t)
 
 	// 1 video track, 1 audio track, 0 image tracks
 	req := &EncodingRequest{
@@ -133,15 +124,13 @@ func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
 }
 
 func TestEncodeBox_CleanUpAssets(t *testing.T) {
-	dir, _, eBox := Setup(t)
-	defer Teardown(t, dir)
+	_, eBox := Setup(t)
 	aCol := getAssetsCollection(1, 3, 0)
 	eBox.cleanUpAssets(aCol)
 }
 
 func TestEncodeBox_Encode(t *testing.T) {
-	dir, proxy, eBox := Setup(t)
-	defer Teardown(t, dir)
+	proxy, eBox := Setup(t)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
 	req := &EncodingRequest{
@@ -160,13 +149,6 @@ func TestEncodeBox_Encode(t *testing.T) {
 		case <-eBox.Ctx.Done():
 			return
 		}
-	}
-}
-
-func Teardown(t *testing.T, dir string) {
-	err := os.RemoveAll(dir)
-	if err != nil {
-		t.Fatal(err)
 	}
 }
 
