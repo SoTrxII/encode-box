@@ -1,6 +1,9 @@
 package filtergraph
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type AudioVolumeFilter struct {
 	Node
@@ -19,7 +22,14 @@ func NewAudioVolumeFilter(target Filter, targetVolume float32) *AudioVolumeFilte
 
 func (avf *AudioVolumeFilter) Build() string {
 	// Expected format : [0]volume=0.5[r1]
-	return fmt.Sprintf("[%s]volume=%.2f[%s];", avf.children[0].Id(), avf.targetVolume, avf.Id())
+	ss := strings.Builder{}
+	// First let the children Build themselves
+	for _, c := range avf.children {
+		ss.WriteString(c.Build())
+	}
+	ss.WriteString(fmt.Sprintf("[%s]volume=%.2f[%s];", avf.children[0].Id(), avf.targetVolume, avf.Id()))
+
+	return ss.String()
 }
 
 func (avf *AudioVolumeFilter) Id() string {
