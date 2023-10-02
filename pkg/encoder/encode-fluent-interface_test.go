@@ -13,7 +13,7 @@ func TestEncoderBuilder_getCmd(t *testing.T) {
 	builder := &Builder{}
 	// Build a graph for normalizaing audio
 	fInput := filtergraph.NewInput("0")
-	graph := filtergraph.NewAudioNormalizationFilter(fInput)
+	graph := filtergraph.NewAudioNormalizationFilter(fInput, filtergraph.Dynaudnorm)
 
 	const inputPath = "/tmp/test"
 	const outputPath = "/tmp/testOut"
