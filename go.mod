@@ -1,9 +1,8 @@
 module encode-box
 
-go 1.18
+go 1.21
 
 require (
-	github.com/dapr/dapr v1.11.3
 	github.com/dapr/go-sdk v1.8.0
 	github.com/golang/mock v1.6.0
 	github.com/joho/godotenv v1.4.0
