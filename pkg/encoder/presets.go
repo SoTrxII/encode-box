@@ -145,8 +145,10 @@ func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, sideAudioPath s
 		sideTrack = filtergraph.NewInput(fmt.Sprintf("%d", len(audioPaths)+1))
 		// Normalize it...
 		sideTrack = filtergraph.NewAudioNormalizationFilter(sideTrack, filtergraph.Dynaudnorm)
+		// And reduce its volume to properly stay in the background
+		sideTrack = filtergraph.NewAudioVolumeFilter(sideTrack, 0.22)
 		// ... and mix it with the main audio track
-		graphRoot = filtergraph.NewAudioMixFilter(graphRoot, sideTrack, filtergraph.WithoutModulation, [2]float32{1, 0.33})
+		graphRoot = filtergraph.NewAudioMixFilter(graphRoot, sideTrack, filtergraph.WithoutModulation, [2]float32{1, 0.85})
 	}
 
 	// ... and resample the resulting audio
