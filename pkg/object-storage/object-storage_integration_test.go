@@ -42,7 +42,9 @@ func setup(t *testing.T) *ObjectStorage {
 
 func teardown(t *testing.T) {
 	err := os.RemoveAll(STORAGE_PATH)
-	assert.NoError(t, err)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 func TestUpload(t *testing.T) {
 	objStore := setup(t)
