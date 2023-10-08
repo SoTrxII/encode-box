@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestConsoleParser_ParseProgress(t *testing.T) {
@@ -16,7 +17,7 @@ func TestConsoleParser_ParseProgress(t *testing.T) {
 	assert.Equal(t, e.Fps, 335)
 	assert.Equal(t, e.Quality, float32(28.0))
 	assert.Equal(t, e.Size, int64(10))
-	assert.Equal(t, e.Time.Format("15:04:05.00"), "00:01:31.60")
+	assert.Equal(t, time.Minute+31*time.Second, e.Time)
 	assert.Equal(t, e.Speed, float32(13.1))
 }
 

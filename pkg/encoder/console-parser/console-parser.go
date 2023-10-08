@@ -27,12 +27,12 @@ type EncodingProgress struct {
 	// Estimated size of the converted file (kb)
 	Size int64 `json:"size"`
 	// Total processed time
-	Time time.Time `json:"time"`
+	Time time.Duration `json:"time"`
 	// Target bitrate
 	Bitrate string `json:"bitrate"`
 	// Encoding speed. A "2" means 1 second of encoding would be a 2 seconds playback
 	Speed float32 `json:"speed"`
-	// The duration of the output file
+	// The duration of the output file, not emitted by ffmpeg
 	TargetDuration time.Duration `json:"totalDuration"`
 }
 
@@ -144,7 +144,9 @@ func parseProgress(progressLine string) (*EncodingProgress, error) {
 			break
 		case "time":
 			if t, err := time.Parse("15:04:05", value); err == nil {
-				p.Time = t
+				p.Time = time.Duration(t.Hour())*time.Hour +
+					time.Duration(t.Minute())*time.Minute +
+					time.Duration(t.Second())*time.Second
 			}
 			break
 		case "speed":

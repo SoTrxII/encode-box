@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/mock"
 	"testing"
-	"time"
 )
 
 func TestProgressBroker_SendProgress(t *testing.T) {
@@ -29,7 +28,7 @@ func TestProgressBroker_SendProgress(t *testing.T) {
 			Fps:     0,
 			Quality: 0,
 			Size:    0,
-			Time:    time.Time{},
+			Time:    0,
 			Bitrate: "",
 			Speed:   0,
 		},
