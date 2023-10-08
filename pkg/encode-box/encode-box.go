@@ -67,6 +67,11 @@ func (eb *EncodeBox) Encode(req *EncodingRequest, output string) {
 		log.Errorf(`Error while downloading assets : %s`, err)
 		eb.EChan <- err
 	}
+	duration := allAssets.getOutputDuration()
+	if err != nil {
+		// Having an error here isn't that important, we can still continue
+		log.Warnf(`Unable to get the asset collection duration: %s`, err)
+	}
 	// Queue the assets cleaning up
 	defer eb.cleanUpAssets(allAssets)
 	// Choose encoding method
@@ -83,6 +88,7 @@ func (eb *EncodeBox) Encode(req *EncodingRequest, output string) {
 	for {
 		select {
 		case p := <-enc.PChan:
+			p.TargetDuration = duration
 			log.Debugf("%+v\n", p)
 			eb.PChan <- *p
 		case e := <-enc.EChan:

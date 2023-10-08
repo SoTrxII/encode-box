@@ -1,5 +1,10 @@
 package encode_box
 
+import (
+	"encode-box/pkg/encoder"
+	"time"
+)
+
 // Asset An asset is a file to download from the backend storage
 type Asset struct {
 	// storage backend key for this asset
@@ -96,4 +101,36 @@ func (ac *AssetCollection) findPaths(predicate func(*Asset) bool) []string {
 		}
 	}
 	return ret
+}
+
+func (ac *AssetCollection) getOutputDuration() time.Duration {
+	var maxDur time.Duration
+	// Get maximum duration through all audios or videos assets
+
+	// The length of the final audio track is the length of the sum of all audio tracks
+	for _, a := range *ac {
+		if a.path != "" && a.media == Audio {
+			dur, err := encoder.GetDuration(a.path)
+			if err != nil {
+				log.Debugf("[Encode box] :: Could not get duration for asset %s, err : %s", a.path, err)
+				continue
+			}
+			maxDur += dur
+		}
+	}
+
+	// All other asset are in one unit, so we can directly compare
+	for _, a := range *ac {
+		if a.path != "" && a.media != Audio && a.media != Image {
+			dur, err := encoder.GetDuration(a.path)
+			if err != nil {
+				log.Debugf("[Encode box] :: Could not get duration for asset %s, err : %s", a.path, err)
+				continue
+			}
+			if dur > maxDur {
+				maxDur = dur
+			}
+		}
+	}
+	return maxDur
 }

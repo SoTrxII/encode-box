@@ -32,6 +32,8 @@ type EncodingProgress struct {
 	Bitrate string `json:"bitrate"`
 	// Encoding speed. A "2" means 1 second of encoding would be a 2 seconds playback
 	Speed float32 `json:"speed"`
+	// The duration of the output file
+	TargetDuration time.Duration `json:"totalDuration"`
 }
 
 func ParseOutput(ctx *context.Context, readStream *io.ReadCloser, progressChan chan *EncodingProgress, errorChan chan error) string {

@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/dapr/go-sdk/client"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"testing"
@@ -50,6 +51,10 @@ func SetupInt(t *testing.T) (string, *EncodeBox) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = cpyToStorage(&daprClient, filepath.Join(ResDir, "dialog.mp3"), "dialog", b64)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	dir, err := os.MkdirTemp("", "test-encode-int")
 	if err != nil {
@@ -63,7 +68,7 @@ func TestNewEncodeBox_Int_Encode_SingleAudio(t *testing.T) {
 	dir, eBox := SetupInt(t)
 	request := EncodingRequest{
 		VideoKey:   "video",
-		AudiosKeys: []string{"audio"},
+		AudiosKeys: []string{"dialog"},
 		ImageKey:   "",
 		Options:    EncodingOptions{},
 	}
@@ -76,6 +81,7 @@ Loop:
 			t.Fatal(e)
 		case p := <-eBox.PChan:
 			fmt.Printf("%+v", p)
+			assert.Equal(t, 22.0, p.TargetDuration.Seconds())
 		case <-eBox.Ctx.Done():
 			fmt.Println("All Done")
 			break Loop
@@ -100,6 +106,32 @@ Loop:
 		case e := <-eBox.EChan:
 			t.Fatal(e)
 		case p := <-eBox.PChan:
+			fmt.Printf("%+v", p)
+		case <-eBox.Ctx.Done():
+			fmt.Println("All Done")
+			break Loop
+		}
+	}
+	fmt.Printf("Output dir : %s", dir)
+}
+
+func TestNewEncodeBox_Int_Encode_MultipleAudio_LongerThanVideo(t *testing.T) {
+	dir, eBox := SetupInt(t)
+	request := EncodingRequest{
+		VideoKey:   "video",
+		AudiosKeys: []string{"dialog", "audio2", "audio3"},
+		ImageKey:   "",
+		Options:    EncodingOptions{},
+	}
+	go eBox.Encode(&request, filepath.Join(dir, "out.mp4"))
+
+Loop:
+	for {
+		select {
+		case e := <-eBox.EChan:
+			t.Fatal(e)
+		case p := <-eBox.PChan:
+			assert.Equal(t, 22.0+3+3, p.TargetDuration.Seconds())
 			fmt.Printf("%+v", p)
 		case <-eBox.Ctx.Done():
 			fmt.Println("All Done")

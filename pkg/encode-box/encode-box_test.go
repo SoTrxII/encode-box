@@ -36,6 +36,24 @@ func TestEncodeBox_DownloadAssets(t *testing.T) {
 	assert.Equal(t, filepath.Join(eBox.Tmpdir, (*aCol)[1].key), (*aCol)[1].path)
 }
 
+// The default asset colelction should have no path, so duuration cannot be retrieved
+func TestEncodeBox_DownloadAssets_GetDuration_NoDownload(t *testing.T) {
+	aCol := getAssetsCollection(1, 1, 0)
+	assert.Zero(t, aCol.getOutputDuration())
+}
+
+// It should not panic on invalid data
+func TestEncodeBox_DownloadAssets_GetDuration_InvalidData(t *testing.T) {
+	proxy, eBox := Setup(t)
+	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
+	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
+	aCol := getAssetsCollection(1, 1, 0)
+	err := eBox.downloadAssets(aCol)
+	assert.Nil(t, err)
+	assert.Zero(t, aCol.getOutputDuration())
+
+}
+
 func TestEncodeBox_DownloadAssetsErr(t *testing.T) {
 	proxy, eBox := Setup(t)
 	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
