@@ -151,9 +151,6 @@ func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, sideAudioPath s
 		graphRoot = filtergraph.NewAudioMixFilter(graphRoot, sideTrack, filtergraph.WithoutModulation, [2]float32{1, 0.85})
 	}
 
-	// ... and resample the resulting audio
-	graphRoot = filtergraph.NewAudioResampleFilter(graphRoot, filtergraph.K44)
-
 	// And assign the graph to the command
 	builder.SetFilterGraph(graphRoot)
 
