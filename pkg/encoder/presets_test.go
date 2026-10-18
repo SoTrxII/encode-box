@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
+	"os/exec"
 	"path"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -79,7 +82,7 @@ func TestEncodeBox_getAudiosOnly_SingleAudio(t *testing.T) {
 	dir, out := Setup(t)
 	defer Teardown(t, dir)
 	ctx := context.Background()
-	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1}, "", out)
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1}, "", 0, out)
 	err = runEncoding(t, enc)
 	assert.Nil(t, err)
 }
@@ -89,7 +92,7 @@ func TestEncodeBox_getAudiosOnly_MultipleAudios(t *testing.T) {
 	dir, out := Setup(t)
 	defer Teardown(t, dir)
 	ctx := context.Background()
-	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1, TestAudio2, TestAudio3}, "", out)
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1, TestAudio2, TestAudio3}, "", 0, out)
 	err = runEncoding(t, enc)
 	assert.Nil(t, err)
 }
@@ -98,9 +101,30 @@ func TestEncodeBox_getAudiosOnly_SingleAudio_SideChannel(t *testing.T) {
 	dir, out := Setup(t)
 	defer Teardown(t, dir)
 	ctx := context.Background()
-	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestDialog}, TestBackground, out)
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestDialog}, TestBackground, 0, out)
 	err = runEncoding(t, enc)
 	assert.Nil(t, err)
+}
+
+// The voices decide how long the audio is, whatever the length of the jukebox
+// recording : it is stopped a few seconds after Discord on /session end (longer),
+// or earlier when the GM stops recording before the end (shorter)
+func TestEncodeBox_getAudiosOnly_SideChannelNeverChangesTheLength(t *testing.T) {
+	// The audio track, not the file : the picture always runs ~3s past the
+	// audio, ffmpeg's -shortest stopping late (25.92s of video for 22.81s of
+	// audio, with or without a side track)
+	audioSeconds := func(file string) float64 { return streamSeconds(t, file, "a:0") }
+	voices := audioSeconds(TestDialog)
+	for name, side := range map[string]string{"longer": TestBackground, "shorter": TestAudio1} {
+		dir, out := Setup(t)
+		ctx := context.Background()
+		enc, err := GetAudiosOnlyEnc(&ctx, []string{TestDialog}, side, 0, out)
+		assert.Nil(t, err)
+		assert.Nil(t, runEncoding(t, enc))
+		// Encoder padding and an audio frame of slack
+		assert.InDelta(t, voices, audioSeconds(out), 0.1, "with a %s side track", name)
+		Teardown(t, dir)
+	}
 }
 
 // Testing an encoding with a placeholder used as a video track and multiples audio tracks
@@ -108,7 +132,7 @@ func TestEncodeBox_getAudiosOnly_MultipleAudios_SideChannel(t *testing.T) {
 	dir, out := Setup(t)
 	defer Teardown(t, dir)
 	ctx := context.Background()
-	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1, TestAudio2, TestAudio3}, TestAudio2, out)
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestAudio1, TestAudio2, TestAudio3}, TestAudio2, 0, out)
 	err = runEncoding(t, enc)
 	assert.Nil(t, err)
 }
@@ -138,4 +162,55 @@ func runEncoding(t *testing.T, enc *Encoder) error {
 			return nil
 		}
 	}
+}
+
+// The Roll20 tab's picture, as roll20-audio-sync hands it over: one picture
+// track per capture, at its place on the Discord timeline, next to the jukebox
+// sound. Each shows where it was recorded, the black background elsewhere,
+// and the voices still decide the length
+func TestEncodeBox_getAudiosOnly_SidePictures(t *testing.T) {
+	dir, out := Setup(t)
+	defer Teardown(t, dir)
+	voices := 22.81 // TestDialog
+	// A capture from 3s to 7s, and one from 18s, resized, running past the voices
+	side := path.Join(dir, "capture.mkv")
+	assert.Nil(t, exec.Command("ffmpeg", "-v", "error",
+		"-f", "lavfi", "-i", "sine=d=24",
+		"-itsoffset", "3", "-f", "lavfi", "-i", "testsrc=s=1280x720:r=15:d=4",
+		"-itsoffset", "18", "-f", "lavfi", "-i", "testsrc=s=960x540:r=15:d=8",
+		"-map", "0", "-map", "1", "-map", "2", "-c:v", "libx264", "-c:a", "libopus", side).Run())
+
+	ctx := context.Background()
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestDialog}, side, 2, out)
+	assert.Nil(t, err)
+	assert.Nil(t, runEncoding(t, enc))
+
+	assert.InDelta(t, voices, streamSeconds(t, out, "a:0"), 0.1)
+	assert.InDelta(t, voices, streamSeconds(t, out, "v:0"), 0.5)
+
+	// Mean luma of the frame at t: 16 is black
+	luma := func(at float64) float64 {
+		o, _ := exec.Command("ffmpeg", "-ss", fmt.Sprint(at), "-i", out, "-frames:v", "1",
+			"-vf", "signalstats,metadata=print:key=lavfi.signalstats.YAVG", "-f", "null", "-").CombinedOutput()
+		_, value, _ := strings.Cut(string(o), "YAVG=")
+		y, _ := strconv.ParseFloat(strings.Fields(value)[0], 64)
+		return y
+	}
+	for at, black := range map[float64]bool{1: true, 4: false, 6.5: false, 10: true, 19: false, 22: false} {
+		if black {
+			assert.InDelta(t, 16, luma(at), 1, "black at %.1fs", at)
+		} else {
+			assert.Greater(t, luma(at), 50.0, "picture at %.1fs", at)
+		}
+	}
+}
+
+// The duration of one stream of a file
+func streamSeconds(t *testing.T, file, stream string) float64 {
+	out, err := exec.Command("ffprobe", "-v", "error", "-select_streams", stream,
+		"-show_entries", "stream=duration", "-of", "csv=p=0", file).Output()
+	assert.Nil(t, err)
+	d, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	assert.Nil(t, err)
+	return d
 }

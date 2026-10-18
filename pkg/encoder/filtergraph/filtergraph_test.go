@@ -37,7 +37,8 @@ func TestAudioMixFilterWithoutModulation(t *testing.T) {
 	a2 := NewInput("1")
 	mix := NewAudioMixFilter(a1, a2, WithoutModulation, [2]float32{1, 0.2})
 	builtFilter := mix.Build()
-	assert.Equal(t, fmt.Sprintf("[0][1]amix=weights=1.0 0.2[%s];", mix.Id()), builtFilter)
+	// 1 and 0.2, as shares of the whole
+	assert.Equal(t, fmt.Sprintf("[0][1]amix=weights=0.833 0.167:normalize=0:duration=first[%s];", mix.Id()), builtFilter)
 }
 
 // Testing normalization filter in isolation
@@ -98,4 +99,13 @@ func TestCompositeAudioConcatAndMix(t *testing.T) {
 	// concat Id should appear twice. Once as a result for the concat filter, and one more time as an input for
 	// the mix filter
 	assert.Equal(t, 2, strings.Count(builtFilter, concat.Id()))
+}
+
+// Each track is fitted to the background, then laid over what is under it
+func TestVideoTimelineFilter(t *testing.T) {
+	timeline := NewVideoTimelineFilter(NewInput("0"), NewInput("3:v:0"), NewInput("4:v:1"))
+	id := timeline.Id()
+	fit := "fps=15,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:-1:-1,setsar=1"
+	assert.Equal(t, fmt.Sprintf("[3:v:0]%s[%s_t0];[0][%s_t0]overlay=eof_action=pass[%s_o0];"+
+		"[4:v:1]%s[%s_t1];[%s_o0][%s_t1]overlay=eof_action=pass[%s];", fit, id, id, id, fit, id, id, id, id), timeline.Build())
 }

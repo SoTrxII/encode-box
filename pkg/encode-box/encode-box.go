@@ -184,11 +184,15 @@ func (eb *EncodeBox) setupEnc(req *EncodingRequest, assets *AssetCollection, out
 		// Or an image/video encoder
 		enc, err = encoder.GetAudiosImageEnc(&eb.Ctx, assets.ImagesPaths()[0], assets.AudiosPaths(), output)
 	} else if req.ImageKey == "" && req.VideoKey == "" {
-		side := ""
+		side, pictures := "", 0
 		if len(assets.SideAudiosPaths()) != 0 {
 			side = assets.SideAudiosPaths()[0]
+			// The Roll20 tab's picture travels in the jukebox file, when the GM recorded it
+			if pictures, err = encoder.CountVideoStreams(side); err != nil {
+				return nil, fmt.Errorf("probing %s : %w", side, err)
+			}
 		}
-		enc, err = encoder.GetAudiosOnlyEnc(&eb.Ctx, assets.AudiosPaths(), side, output)
+		enc, err = encoder.GetAudiosOnlyEnc(&eb.Ctx, assets.AudiosPaths(), side, pictures, output)
 	} else {
 		// If an unsupported assets set is passed, don't event try and error out
 		return nil, fmt.Errorf("no suitable encoder found for %+v", req)

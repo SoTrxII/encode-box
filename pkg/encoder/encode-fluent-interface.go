@@ -16,8 +16,8 @@ type Builder struct {
 	outputOptions []string
 	// Output file name
 	output string
-	// Root of the filter graph to be used
-	filterGraph filtergraph.Filter
+	// Roots of the filter graphs to be used, one per output stream they build
+	filterGraphs []filtergraph.Filter
 }
 
 // AddInput Add a new input to the encoder
@@ -38,9 +38,10 @@ func (eb *Builder) SetOutput(path string) *Builder {
 	return eb
 }
 
-// SetFilterGraph Set the complex filters to be used
-func (eb *Builder) SetFilterGraph(graph filtergraph.Filter) *Builder {
-	eb.filterGraph = graph
+// SetFilterGraph Set the complex filters to be used: several when the audio and
+// the picture each have their own
+func (eb *Builder) SetFilterGraph(graphs ...filtergraph.Filter) *Builder {
+	eb.filterGraphs = graphs
 	return eb
 }
 
@@ -56,8 +57,11 @@ func (eb *Builder) getFFmpegCmd() string {
 	}
 
 	// Filters
-	if eb.filterGraph != nil {
-		fGraph := eb.filterGraph.Build()
+	if len(eb.filterGraphs) != 0 {
+		fGraph := ""
+		for _, g := range eb.filterGraphs {
+			fGraph += g.Build()
+		}
 		// Remove the last ";" in the last step of the filtergraph. That's how FFmpeg knows it's complete
 		ss.WriteString(fmt.Sprintf(` -filter_complex "%s"`, strings.TrimSuffix(fGraph, ";")))
 	}
