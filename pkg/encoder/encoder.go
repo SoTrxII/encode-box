@@ -57,7 +57,9 @@ func (e *Encoder) Start() {
 			}
 		}
 	}
-	cmd := exec.Command("ffmpeg", arguments...)
+	// Bound to the context, or Cancel would leave ffmpeg encoding for nothing:
+	// three test encodes ran nine hours after their tests had returned
+	cmd := exec.CommandContext(e.Ctx, "ffmpeg", arguments...)
 
 	// FFMpeg pipe output in stderr for some reason
 	stderr, err := cmd.StderrPipe()
