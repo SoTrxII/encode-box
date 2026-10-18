@@ -19,7 +19,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 var (
@@ -128,15 +127,11 @@ func encodeSync(w http.ResponseWriter, req *http.Request, comp components) {
 	}
 	log.Infof(`Processing of request with id "%s" complete !`, encodeRequest.JobId)
 
-	// Optionally, we can also clean up the used assets from the remote object storage
+	// The inputs stay in the object store: the cooked audio is what the
+	// summarizer transcribes, for hours after the video is out. An option used
+	// to delete them here, and was only never used because the orchestrator's
+	// field for it was unexported
 
-	if encodeRequest.Options.DeleteAssetsFromObjStore {
-		log.Infof("Removing used assets from remote object storage")
-		err = cleanUpFromObjectStore(encodeRequest, comp.objStore)
-		if err != nil {
-			log.Warnf(err.Error())
-		}
-	}
 	// Finally, ACK the message
 	_, _ = w.Write([]byte("OK"))
 }
@@ -177,36 +172,6 @@ func parseBody(from io.ReadCloser) (*encode_box.EncodingRequest, error) {
 		return nil, err
 	}
 	return &eReq, nil
-}
-
-func cleanUpFromObjectStore(eReq *encode_box.EncodingRequest, objStore *object_storage.ObjectStorage) error {
-	var failures []string
-	// Video
-	if eReq.VideoKey != "" {
-		err := objStore.Delete(eReq.VideoKey)
-		if err != nil {
-			failures = append(failures, eReq.VideoKey)
-		}
-	}
-	// Audio(s)
-	for _, key := range eReq.AudiosKeys {
-		err := objStore.Delete(key)
-		if err != nil {
-			failures = append(failures, key)
-		}
-	}
-	// Image
-	if eReq.ImageKey != "" {
-		err := objStore.Delete(eReq.ImageKey)
-		if err != nil {
-			failures = append(failures, eReq.ImageKey)
-		}
-	}
-
-	if len(failures) > 0 {
-		return fmt.Errorf(`failed to delete "%s" from remote object storage`, strings.Join(failures, ", "))
-	}
-	return nil
 }
 
 // Format a proper encoding request from a stream

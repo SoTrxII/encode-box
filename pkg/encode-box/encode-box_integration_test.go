@@ -70,7 +70,6 @@ func TestNewEncodeBox_Int_Encode_SingleAudio(t *testing.T) {
 		VideoKey:   "video",
 		AudiosKeys: []string{"dialog"},
 		ImageKey:   "",
-		Options:    EncodingOptions{},
 	}
 	go eBox.Encode(&request, filepath.Join(dir, "out.mp4"))
 
@@ -96,7 +95,6 @@ func TestNewEncodeBox_Int_Encode_MultipleAudio(t *testing.T) {
 		VideoKey:   "video",
 		AudiosKeys: []string{"audio", "audio2", "audio3"},
 		ImageKey:   "",
-		Options:    EncodingOptions{},
 	}
 	go eBox.Encode(&request, filepath.Join(dir, "out.mp4"))
 
@@ -121,7 +119,6 @@ func TestNewEncodeBox_Int_Encode_MultipleAudio_LongerThanVideo(t *testing.T) {
 		VideoKey:   "video",
 		AudiosKeys: []string{"dialog", "audio2", "audio3"},
 		ImageKey:   "",
-		Options:    EncodingOptions{},
 	}
 	go eBox.Encode(&request, filepath.Join(dir, "out.mp4"))
 

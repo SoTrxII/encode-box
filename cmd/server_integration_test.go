@@ -65,7 +65,6 @@ func TestMain_Encode_AudioVideo_Int(t *testing.T) {
 		VideoKey:   "video",
 		AudiosKeys: []string{"audio", "audio2", "audio3"},
 		ImageKey:   "",
-		Options:    encode_box.EncodingOptions{},
 	}
 	// Make temp dir for output
 	dir, err := os.MkdirTemp("", "encode-instance")
@@ -84,7 +83,6 @@ func TestMain_Encode_AudioImage_Int(t *testing.T) {
 		VideoKey:   "",
 		AudiosKeys: []string{"audio", "audio2", "audio3"},
 		ImageKey:   "image",
-		Options:    encode_box.EncodingOptions{},
 	}
 	// Make temp dir for output
 	dir, err := os.MkdirTemp("", "encode-instance")
@@ -103,7 +101,6 @@ func TestMain_Encode_AudioOnly_Int(t *testing.T) {
 		VideoKey:   "",
 		AudiosKeys: []string{"audio", "audio2", "audio3"},
 		ImageKey:   "",
-		Options:    encode_box.EncodingOptions{},
 	}
 	// Make temp dir for output
 	dir, err := os.MkdirTemp("", "encode-instance")

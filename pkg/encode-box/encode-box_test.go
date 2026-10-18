@@ -89,7 +89,6 @@ func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
 		VideoKey:   "a",
 		AudiosKeys: []string{"d"},
 		ImageKey:   "",
-		Options:    EncodingOptions{},
 	}
 	aCol := getAssetsCollection(1, 1, 0)
 	_, err := eBox.setupEnc(req, aCol, "testoutput")
@@ -100,7 +99,6 @@ func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
 		VideoKey:   "a",
 		AudiosKeys: []string{"d"},
 		ImageKey:   "",
-		Options:    EncodingOptions{},
 	}
 	aCol = getAssetsCollection(1, 3, 0)
 	_, err = eBox.setupEnc(req, aCol, "testoutput")
@@ -111,7 +109,6 @@ func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
 		VideoKey:   "",
 		AudiosKeys: []string{"d"},
 		ImageKey:   "",
-		Options:    EncodingOptions{},
 	}
 	aCol = getAssetsCollection(0, 3, 0)
 	_, err = eBox.setupEnc(req, aCol, "testoutput")
@@ -122,7 +119,6 @@ func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
 		VideoKey:   "a",
 		AudiosKeys: []string{"d"},
 		ImageKey:   "a",
-		Options:    EncodingOptions{},
 	}
 	aCol = getAssetsCollection(1, 3, 1)
 	_, err = eBox.setupEnc(req, aCol, "testoutput")
@@ -133,7 +129,6 @@ func TestEncodeBox_SetupEncVideoAudio_AudioVideo(t *testing.T) {
 		VideoKey:   "a",
 		AudiosKeys: []string{},
 		ImageKey:   "",
-		Options:    EncodingOptions{},
 	}
 	aCol = getAssetsCollection(1, 0, 0)
 	_, err = eBox.setupEnc(req, aCol, "testoutput")
@@ -155,7 +150,6 @@ func TestEncodeBox_Encode(t *testing.T) {
 		VideoKey:   "d",
 		AudiosKeys: []string{"d"},
 		ImageKey:   "",
-		Options:    EncodingOptions{},
 	}
 	go eBox.Encode(req, "output")
 	for {
