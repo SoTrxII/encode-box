@@ -6,12 +6,14 @@ import (
 	mock_object_storage "encode-box/internal/mock/mock-object-storage"
 	encode_box "encode-box/pkg/encode-box"
 	object_storage "encode-box/pkg/object-storage"
+	progress_broker "encode-box/pkg/progress-broker"
 	test_utils "encode-box/test-utils"
 	"encoding/json"
 	"fmt"
 	"github.com/dapr/go-sdk/client"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -318,6 +320,7 @@ func TestMain_NewEncodeRequest_AudioVideo_Ok(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	events := recordStates(t)
 	// Redirect calls to the backend storage to valid assets for each required assets in the request
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
@@ -343,6 +346,7 @@ func TestMain_NewEncodeRequest_AudioVideo_Ok(t *testing.T) {
 	// Finally, mock a Ok reponse when the server will try to upload on the remote storage
 	proxy.EXPECT().
 		InvokeBinding(gomock.Any(), NewBidingMatcher(fmt.Sprintf("%s.mp4", eReq.JobId), "create")).
+		Do(func(context.Context, *client.InvokeBindingRequest) { *events = append(*events, "upload") }).
 		Return(&client.BindingEvent{}, nil)
 
 	objStore := object_storage.NewObjectStorage(&ctx, proxy, "", b64)
@@ -352,6 +356,8 @@ func TestMain_NewEncodeRequest_AudioVideo_Ok(t *testing.T) {
 		objStore: objStore,
 	})
 	assert.Equal(t, http.StatusOK, w.Code)
+	// The orchestrator starts the YouTube upload on Done, which downloads the video
+	assert.Equal(t, []string{"upload", "Done"}, *events)
 }
 
 func TestMain_NewEncodeRequest_AudioImage_Ok(t *testing.T) {
@@ -574,6 +580,7 @@ func TestMain_NewEncodeRequest_UploadError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	events := recordStates(t)
 	// Redirect calls to the backend storage to valid assets for each required assets in the request
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
@@ -607,6 +614,28 @@ func TestMain_NewEncodeRequest_UploadError(t *testing.T) {
 		objStore: objStore,
 	})
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	// Without it, the orchestrator waits for a video that will never come
+	assert.Equal(t, []string{"Error"}, *events)
+}
+
+// Sets a broker for the test, and writes in order each state but progress it is sent
+func recordStates(t *testing.T) *[]string {
+	events := &[]string{}
+	names := map[progress_broker.EncodeState]string{progress_broker.Done: "Done", progress_broker.Error: "Error"}
+	pub := test_utils.MockPublisher{}
+	pub.EXPECT().PublishEvent(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Run(func(_ context.Context, _ string, _ string, data interface{}, _ ...client.PublishEventOption) {
+			var infos progress_broker.EncodeInfos
+			_ = json.Unmarshal([]byte(data.(string)), &infos)
+			if infos.State != progress_broker.InProgress {
+				*events = append(*events, names[infos.State])
+			}
+		}).
+		Return(nil)
+	ctx := context.Background()
+	broker, _ = progress_broker.NewProgressBroker(&ctx, &pub, progress_broker.NewBrokerOptions{})
+	t.Cleanup(func() { broker = nil })
+	return events
 }
 
 func TestMain_NewEncodeRequest_NoDapr(t *testing.T) {

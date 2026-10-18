@@ -94,6 +94,7 @@ func encodeSync(w http.ResponseWriter, req *http.Request, comp components) {
 	workDir, err := os.MkdirTemp("", "encode-instance")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("can't create temp workDir : %s", err.Error()), http.StatusInternalServerError)
+		return
 	}
 	outputName := fmt.Sprintf("%s.mp4", encodeRequest.JobId)
 	outputPath := filepath.Join(workDir, outputName)
@@ -109,9 +110,14 @@ func encodeSync(w http.ResponseWriter, req *http.Request, comp components) {
 	err = comp.objStore.Upload(outputPath, outputName)
 	if err != nil {
 		log.Errorf(`error while upload the record in the backend object storage : %s`, err.Error())
+		notify(encodeRequest.JobId, progress_broker.Error, encodeError{Message: err.Error()})
 		http.Error(w, "Unexpected error", http.StatusInternalServerError)
 		return
 	}
+	// Only now : the orchestrator starts the YouTube upload on this event, and
+	// video-store downloads the video. Sent when ffmpeg exited, it could ask
+	// for a <jobId>.mp4 still on its way to the object store
+	notify(encodeRequest.JobId, progress_broker.Done, nil)
 
 	// And clean up temp files on the container filesystem
 	// Downloaded assets are already cleaned up by the encode-box itself
@@ -225,7 +231,14 @@ func makeEncodingRequest(from io.ReadCloser) (*encode_box.EncodingRequest, error
 // Fired when an error occured while encoding a video
 type encodeError struct {
 	// Error message
-	Message string `json:message`
+	Message string `json:"message"`
+}
+
+// Tell the orchestrator how the job goes, if there is a broker to tell it
+func notify(jobId string, state progress_broker.EncodeState, data interface{}) {
+	if broker != nil {
+		_ = broker.SendProgress(progress_broker.EncodeInfos{JobId: jobId, State: state, Data: data})
+	}
 }
 
 // Fire a new encoding
@@ -235,33 +248,14 @@ func encode(eBox *encode_box.EncodeBox, req *encode_box.EncodingRequest, output 
 	for {
 		select {
 		case e := <-eBox.EChan:
-			if broker != nil {
-				broker.SendProgress(progress_broker.EncodeInfos{
-					JobId: req.JobId,
-					State: progress_broker.Error,
-					Data:  encodeError{Message: e.Error()},
-				})
-			}
-
+			notify(req.JobId, progress_broker.Error, encodeError{Message: e.Error()})
 			eBox.Cancel()
 			return e, http.StatusBadRequest
 		case p := <-eBox.PChan:
 			fmt.Printf("%+v", p)
-			if broker != nil {
-				broker.SendProgress(progress_broker.EncodeInfos{
-					JobId: req.JobId,
-					State: progress_broker.InProgress,
-					Data:  p,
-				})
-			}
+			notify(req.JobId, progress_broker.InProgress, p)
 		case <-eBox.Ctx.Done():
-			if broker != nil {
-				broker.SendProgress(progress_broker.EncodeInfos{
-					JobId: req.JobId,
-					State: progress_broker.Done,
-					Data:  nil,
-				})
-			}
+			// Done is the caller's to send, once the video is uploaded
 			return nil, http.StatusOK
 		}
 	}
