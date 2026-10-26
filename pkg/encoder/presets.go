@@ -119,7 +119,11 @@ func GetAudiosImageEnc(ctx *context.Context, imagePath string, audioPaths []stri
 func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, sideAudioPath string, sidePictures int, output string) (*Encoder, error) {
 	builder := Builder{}
 	// video track
-	background := "color=black:s=1280x720:r=25"
+	// Twelve frames a second of black: on the VPS, 10 min of audio cost 222
+	// CPU-s at 25 fps (default preset), 71 at 12 fps with ultrafast, 39 at 1 fps.
+	// 1 fps is cheaper still but ffmpeg's -shortest then lets the picture run
+	// 64 s (10 min) to 70 s (2h21) past the audio; 12 fps ends with it
+	background := "color=black:s=1280x720:r=12"
 	if sidePictures > 0 {
 		background = fmt.Sprintf("color=black:s=%dx%d:r=%d", filtergraph.TimelineWidth, filtergraph.TimelineHeight, filtergraph.TimelineFps)
 	}
@@ -157,11 +161,22 @@ func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, sideAudioPath s
 		sideTrack = filtergraph.NewInput(fmt.Sprintf("%d", len(audioPaths)+1))
 		// Normalize it...
 		sideTrack = filtergraph.NewAudioNormalizationFilter(sideTrack, filtergraph.Dynaudnorm)
-		// And reduce its volume to properly stay in the background
-		sideTrack = filtergraph.NewAudioVolumeFilter(sideTrack, 0.22)
+		// And reduce its volume to properly stay in the background: ~15 LU under
+		// the voices, chosen by ear against two actual-play channels (2026-10-23).
+		// Measured on a real session: 0.22 gave 11-13.5 LU, closer to the voices
+		// than Sombres Machinations (15-20 LU), further than Bazar du Grenier (8-12)
+		sideTrack = filtergraph.NewAudioVolumeFilter(sideTrack, 0.18)
 		// ... and mix it with the main audio track
 		graphRoot = filtergraph.NewAudioMixFilter(graphRoot, sideTrack, filtergraph.WithoutModulation, [2]float32{1, 0.85})
 	}
+	// YouTube plays videos at about -14 LUFS and turns louder ones down, never
+	// quieter ones up: the mix came out at -19.7, ~6 LU quieter than other
+	// channels. One pass: within 0.14 LU on average of a two-pass loudnorm on
+	// a real session, which falls back to this dynamic mode anyway, the voices'
+	// peaks leaving no room for +5 dB of constant gain under -1.5 dBTP
+	graphRoot = filtergraph.NewAudioNormalizationFilter(graphRoot, filtergraph.Loudnorm)
+	// loudnorm outputs 192 kHz
+	graphRoot = filtergraph.NewAudioResampleFilter(graphRoot, filtergraph.K44)
 
 	builder.
 		AddOutputOption("-pix_fmt yuv420p").
@@ -171,7 +186,7 @@ func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, sideAudioPath s
 	if sidePictures == 0 {
 		builder.SetFilterGraph(graphRoot)
 		// As we are using a static image, we can configure x264 to optimize for it
-		builder.AddOutputOption("-tune stillimage").AddOutputOption("-map 0:v")
+		builder.AddOutputOption("-tune stillimage").AddOutputOption("-preset ultrafast").AddOutputOption("-map 0:v")
 	} else {
 		// The side file again, once per picture track. Read once, ffmpeg decodes
 		// and holds every frame of the file until the latest track's first one:

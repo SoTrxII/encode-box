@@ -15,7 +15,7 @@ type AudioNormalizationFilter struct {
 type AudioNormalizationMode uint8
 
 const (
-	// Default mode, slow but precise
+	// To YouTube's playback loudness, -14 LUFS
 	// Documentation : https://ffmpeg.org/ffmpeg-filters.html#loudnorm
 	Loudnorm AudioNormalizationMode = iota
 	// Faster than loudnorm, less precise
@@ -36,7 +36,7 @@ func NewAudioNormalizationFilter(target Filter, mode AudioNormalizationMode) *Au
 }
 
 func (amf *AudioNormalizationFilter) Build() string {
-	// Expected format : [0:a]loudnorm=I=-16:TP=-1.5:LRA=11[norm]
+	// Expected format : [0:a]loudnorm=I=-14:TP=-1.5:LRA=11[norm]
 	ss := strings.Builder{}
 	// First let the children Build themselves
 	for _, c := range amf.children {
@@ -44,7 +44,7 @@ func (amf *AudioNormalizationFilter) Build() string {
 	}
 	switch amf.mode {
 	case Loudnorm:
-		ss.WriteString(fmt.Sprintf("[%s]loudnorm=I=-16:TP=-1.5:LRA=11[%s];", amf.children[0].Id(), amf.Id()))
+		ss.WriteString(fmt.Sprintf("[%s]loudnorm=I=-14:TP=-1.5:LRA=11[%s];", amf.children[0].Id(), amf.Id()))
 	case Dynaudnorm:
 		ss.WriteString(fmt.Sprintf("[%s]dynaudnorm[%s];", amf.children[0].Id(), amf.Id()))
 	case Speechnorm:

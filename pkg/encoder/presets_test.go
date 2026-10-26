@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -123,8 +124,28 @@ func TestEncodeBox_getAudiosOnly_SideChannelNeverChangesTheLength(t *testing.T) 
 		assert.Nil(t, runEncoding(t, enc))
 		// Encoder padding and an audio frame of slack
 		assert.InDelta(t, voices, audioSeconds(out), 0.1, "with a %s side track", name)
+		// The 12 fps picture ends with the audio: at 1 fps ffmpeg's -shortest
+		// left it running 64 s past (measured on 10 min). 1.5 s here is 12 fps
+		// plus the same slack as before (0.4 to 1.1 s measured at 25 fps)
+		assert.InDelta(t, voices, streamSeconds(t, out, "v:0"), 1.5, "with a %s side track", name)
 		Teardown(t, dir)
 	}
+}
+
+// The video plays at YouTube's loudness, -14 LUFS, rather than ~6 LU under it
+func TestEncodeBox_getAudiosOnly_Loudness(t *testing.T) {
+	dir, out := Setup(t)
+	defer Teardown(t, dir)
+	ctx := context.Background()
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestDialog}, TestBackground, 0, out)
+	assert.Nil(t, err)
+	assert.Nil(t, runEncoding(t, enc))
+	res, _ := exec.Command("ffmpeg", "-hide_banner", "-nostats", "-i", out, "-af", "ebur128", "-f", "null", "-").CombinedOutput()
+	m := regexp.MustCompile(`I:\s+(-?[\d.]+) LUFS`).FindAllStringSubmatch(string(res), -1)
+	assert.NotEmpty(t, m)
+	// The summary is the last one. Single-pass loudnorm lands within ~1 LU
+	lufs, _ := strconv.ParseFloat(m[len(m)-1][1], 64)
+	assert.InDelta(t, -14, lufs, 1.5)
 }
 
 // Testing an encoding with a placeholder used as a video track and multiples audio tracks

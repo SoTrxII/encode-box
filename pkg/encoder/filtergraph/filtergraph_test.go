@@ -46,7 +46,7 @@ func TestNormalizationFilterLoudnorm(t *testing.T) {
 	a1 := NewInput("0")
 	norm := NewAudioNormalizationFilter(a1, Loudnorm)
 	builtFilter := norm.Build()
-	assert.Equal(t, fmt.Sprintf("[0]loudnorm=I=-16:TP=-1.5:LRA=11[%s];", norm.Id()), builtFilter)
+	assert.Equal(t, fmt.Sprintf("[0]loudnorm=I=-14:TP=-1.5:LRA=11[%s];", norm.Id()), builtFilter)
 }
 
 func TestNormalizationFilterDynaudnorm(t *testing.T) {
