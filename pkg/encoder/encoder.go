@@ -42,19 +42,17 @@ func (e *Encoder) Start() {
 	// But we must split all the argument for command exec
 	// So if the command contains a "-filter_complex", we extract it before splitting the command,
 	// and inserting it back later
-	matches := regexp.MustCompile(`-filter_complex "(.+?)"`).FindAllStringSubmatch(sanitizedCmd, 1)
-	hasComplexFilter := len(matches) > 0 && len(matches[0]) == 2
-	var filterGraphString string
-	if hasComplexFilter {
-		filterGraphString = matches[0][1]
-		sanitizedCmd = strings.Replace(sanitizedCmd, filterGraphString, "fg", 1)
+	// There can be several, one per graph
+	matches := regexp.MustCompile(`-filter_complex "(.+?)"`).FindAllStringSubmatch(sanitizedCmd, -1)
+	for _, m := range matches {
+		sanitizedCmd = strings.Replace(sanitizedCmd, m[0], "-filter_complex fg", 1)
 	}
 	arguments := strings.Split(sanitizedCmd, " ")[1:]
-	if hasComplexFilter {
-		for i, arg := range arguments {
-			if strings.HasPrefix(arg, "-filter_complex") {
-				arguments[i+1] = filterGraphString
-			}
+	next := 0
+	for i, arg := range arguments {
+		if arg == "-filter_complex" && next < len(matches) {
+			arguments[i+1] = matches[next][1]
+			next++
 		}
 	}
 	// Bound to the context, or Cancel would leave ffmpeg encoding for nothing:

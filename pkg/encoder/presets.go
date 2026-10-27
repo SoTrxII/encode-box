@@ -202,6 +202,9 @@ func GetAudiosOnlyEnc(ctx *context.Context, audioPaths []string, sideAudioPath s
 		// video on the VPS against 0.63 for the default (medium), so ~25 min of
 		// 3-4 cores for a 4h session, next to whisper
 		builder.AddOutputOption("-preset veryfast").AddOutputOption(fmt.Sprintf("-map [%s]", picture.Id()))
+		// In its own graph, the picture ran 1.06 s past the audio with -shortest's
+		// default 10 s buffer; 1 s ended both together (0.2 did not: 1 s over again)
+		builder.AddOutputOption("-shortest_buf_duration 1")
 	}
 	builder.AddOutputOption(fmt.Sprintf("-map [%s]", graphRoot.Id()))
 	builder.SetOutput(output)

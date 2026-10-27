@@ -57,13 +57,13 @@ func (eb *Builder) getFFmpegCmd() string {
 	}
 
 	// Filters
-	if len(eb.filterGraphs) != 0 {
-		fGraph := ""
-		for _, g := range eb.filterGraphs {
-			fGraph += g.Build()
-		}
+	// One -filter_complex each: ffmpeg rebuilds a whole graph when one of its
+	// inputs changes size, which a GM's window does (resized, maximised). Sharing
+	// the picture's graph, the audio lost what its filters held at each rebuild,
+	// ~3 s of loudnorm's lookahead: 9.4 s of holes in a 163 s Foundry session
+	for _, g := range eb.filterGraphs {
 		// Remove the last ";" in the last step of the filtergraph. That's how FFmpeg knows it's complete
-		ss.WriteString(fmt.Sprintf(` -filter_complex "%s"`, strings.TrimSuffix(fGraph, ";")))
+		ss.WriteString(fmt.Sprintf(` -filter_complex "%s"`, strings.TrimSuffix(g.Build(), ";")))
 	}
 
 	// Output options

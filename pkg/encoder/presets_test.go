@@ -207,7 +207,9 @@ func TestEncodeBox_getAudiosOnly_SidePictures(t *testing.T) {
 	assert.Nil(t, runEncoding(t, enc))
 
 	assert.InDelta(t, voices, streamSeconds(t, out, "a:0"), 0.1)
-	assert.InDelta(t, voices, streamSeconds(t, out, "v:0"), 0.5)
+	// The picture in its own graph, -shortest stops it on the muxer's progress:
+	// 0 to 0.52 s past the voices over three runs
+	assert.InDelta(t, voices, streamSeconds(t, out, "v:0"), 1)
 
 	// Mean luma of the frame at t: 16 is black
 	luma := func(at float64) float64 {
@@ -224,6 +226,40 @@ func TestEncodeBox_getAudiosOnly_SidePictures(t *testing.T) {
 			assert.Greater(t, luma(at), 50.0, "picture at %.1fs", at)
 		}
 	}
+}
+
+// A GM resizing their window mid-capture changes the size of a picture track.
+// ffmpeg then rebuilds the graph of that input, and the audio must not lose
+// a sample: the stream's duration tag does not show a hole, its packets do
+func TestEncodeBox_getAudiosOnly_SidePictureResized(t *testing.T) {
+	dir, out := Setup(t)
+	defer Teardown(t, dir)
+	voices := 22.81 // TestDialog
+	small, large := path.Join(dir, "small.webm"), path.Join(dir, "large.webm")
+	for f, size := range map[string]string{small: "960x540", large: "1280x720"} {
+		assert.Nil(t, exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=r=15:d=6:s="+size,
+			"-c:v", "libvpx", f).Run())
+	}
+	list := path.Join(dir, "list.txt")
+	assert.Nil(t, os.WriteFile(list, []byte(fmt.Sprintf("file '%s'\nfile '%s'\nfile '%s'\n", small, large, small)), 0o644))
+	side := path.Join(dir, "capture.mkv")
+	assert.Nil(t, exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=d=24",
+		"-f", "concat", "-safe", "0", "-i", list,
+		"-map", "0", "-map", "1", "-c:v", "copy", "-c:a", "libopus", side).Run())
+
+	ctx := context.Background()
+	enc, err := GetAudiosOnlyEnc(&ctx, []string{TestDialog}, side, 1, out)
+	assert.Nil(t, err)
+	assert.Nil(t, runEncoding(t, enc))
+
+	o, err := exec.Command("ffprobe", "-v", "error", "-select_streams", "a:0", "-count_packets",
+		"-show_entries", "stream=nb_read_packets,sample_rate", "-of", "csv=p=0", out).Output()
+	assert.Nil(t, err)
+	var rate, packets float64
+	_, err = fmt.Sscanf(strings.TrimSpace(string(o)), "%f,%f", &rate, &packets)
+	assert.Nil(t, err)
+	// AAC: 1024 samples a packet
+	assert.InDelta(t, voices, packets*1024/rate, 0.1)
 }
 
 // The duration of one stream of a file
