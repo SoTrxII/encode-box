@@ -36,6 +36,15 @@ func TestEncodeBox_DownloadAssets(t *testing.T) {
 	assert.Equal(t, filepath.Join(eBox.Tmpdir, (*aCol)[1].key), (*aCol)[1].path)
 }
 
+// The picture's key holds a folder ("video/<id>.mkv"): the download must create it
+func TestEncodeBox_DownloadAssets_KeyWithFolder(t *testing.T) {
+	proxy, eBox := Setup(t)
+	proxy.EXPECT().InvokeBinding(gomock.Any(), gomock.Any()).Return(&client.BindingEvent{Data: []byte("a")}, nil)
+	aCol := &AssetCollection{{key: "video/fvtt-0.mkv"}}
+	assert.Nil(t, eBox.downloadAssets(aCol))
+	assert.FileExists(t, filepath.Join(eBox.Tmpdir, "video", "fvtt-0.mkv"))
+}
+
 // The default asset colelction should have no path, so duuration cannot be retrieved
 func TestEncodeBox_DownloadAssets_GetDuration_NoDownload(t *testing.T) {
 	aCol := getAssetsCollection(1, 1, 0)

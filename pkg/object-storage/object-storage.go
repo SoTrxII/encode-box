@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 type ObjectStore interface {
@@ -48,6 +49,11 @@ func NewObjectStorage(ctx *context.Context, client utils.Binder, component strin
 func (od *ObjectStorage) Download(key, path string) error {
 	reader, err := od.Buffer(key)
 	if err != nil {
+		return err
+	}
+	// A key can hold a folder: the Roll20 or Foundry picture is stored as "video/<id>.mkv", and
+	// os.Create does not make the folder ("no such file or directory", every attempt)
+	if err = os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	output, err := os.Create(path)
